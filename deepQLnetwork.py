@@ -72,23 +72,23 @@ class Model:
         self._soft_update(self.q_target_1, self.q_1)
         self._soft_update(self.q_target_2, self.q_2)
 
-    def save_networks(self, folder_name):
+    def save_networks(self, folder_name, sweep_var):
         """
         Save Networks
         """
         torch.save({"model_state_dict": self.q_1.state_dict(),
                     "optimizer_state_dict": self.q_optimizer_1.state_dict()
-                    }, folder_name + "q_1")
+                    }, folder_name + "q_1" + str(sweep_var))
 
         torch.save({"model_state_dict": self.q_2.state_dict(),
                     "optimizer_state_dict": self.q_optimizer_2.state_dict()
-                    }, folder_name + "q_2")
+                    }, folder_name + "q_2" + str(sweep_var))
 
         torch.save({"model_state_dict": self.q_target_1.state_dict()},
-                   folder_name + "q_target_1")
+                   folder_name + "q_target_1" + str(sweep_var))
 
         torch.save({"model_state_dict": self.q_target_2.state_dict()},
-                   folder_name + "q_target_2")
+                   folder_name + "q_target_2" + str(sweep_var))
 
     def load_networks(self, folder_name="./"):
         """Loads networks and optimizer state

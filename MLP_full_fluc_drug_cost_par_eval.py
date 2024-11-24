@@ -1,34 +1,37 @@
 import os
-import sys
 import random
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
 from cell_model_fluc_drug_cost_eval import Cell_Population
 from replaybuffer import ReplayBuffer
 from deepQLnetwork import Model
 from joblib import Parallel, delayed
 from utils_figure_plot import DynamicUpdate, plot_reward_Q_loss
 import copy
+from scipy import signal
 import matplotlib as mpl
+import wandb
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['ps.fonttype'] = 42
 
 
-def save_results(episode, extinct_prob, extinct_time, folder, filename="eval_results.txt", append=True):
-    output ='episode: '+str(episode)+',     extinction probability: '+str(extinct_prob)+',     ave. extinction time: '+str(extinct_time)
-    if append:
-        with open(folder+'/'+filename, 'a') as file:
-            file.write(f"{output}\n")  # add output followed by a newline
-    else:
-        with open(folder+'/'+filename, 'w') as file:
-            file.write(f"{output}\n")  # write over previous output
-
-
 class CDQL:
-    def __init__(self, kn0_mean=2, num_cells_init=60, delta_t=0.15, omega=0.006, use_gpu=False): #100
-        self.gamma = 0.99
+
+    # later add in learning rate and tau (update rate) as arguments to tune over as well
+    #  - although learning rate and batch size have similar effects
+
+    def __init__(self, delay_embed_len=10,
+            batch_size=512,
+            delta_t=0.2,
+            omega=0.02,
+            gamma=0.99,
+            update_freq=2,
+            use_gpu=False,
+            num_cells_init=60,
+            kn0_mean=2.55,
+            T=12):
+        self.gamma = gamma
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
         else:
@@ -37,18 +40,17 @@ class CDQL:
         self.folder_name = "./"
 
         self.delta_t = delta_t
-        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega)
+        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean, T)
         self.buffer = ReplayBuffer(1e6)
-        self.delay_embed_len = 10
-        self.batch_size = 512
-        self.b_actions = [0.0, 3.7]
+        self.delay_embed_len = delay_embed_len
+        self.batch_size = batch_size
+        self.b_actions = [0.0, 3.72]
         self.b_num_actions = len(self.b_actions)
         self.num_actions = self.b_num_actions
-        self.model = Model(self.device, num_inputs=self.delay_embed_len*2, num_actions=self.num_actions)
+        self.model = Model(self.device, num_inputs=self.delay_embed_len*3, num_actions=self.num_actions)
         self.b_index = [0, 1]
 
-        kn0_init = np.random.normal(loc=kn0_mean, scale=0.2*kn0_mean)
-        self.init = (0.0, kn0_init) # b_init, kn0_init
+        self.init = 0.0 # b_init
         self.loss = []
         self.ave_sum_rewards = []
         self.std_sum_rewards = []
@@ -58,17 +60,17 @@ class CDQL:
         self.ave_Q2_target = []
         self.grad_updates = []
         self.training_iter = 0
-        self.update_freq = 2
+        self.update_freq = update_freq
         self.epsilon = None
         self.episode_num = 0
 
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
 
-    def _save_data(self, folder, episode_num):
-        np.save(folder + "/replaybuffer", np.array(self.buffer.buffer, dtype=object))
+    def _save_data(self, folder, sweep_var, episode_num):
+        np.save(folder + "/replaybuffer" + str(sweep_var), np.array(self.buffer.buffer, dtype=object))
 
-        self.model.save_networks(folder+'/')
+        self.model.save_networks(folder+'/', sweep_var)
         self.save_episode_num(episode_num)
     
     def save_episode_num(self, episode_num, filename='episode_num.txt'):
@@ -172,15 +174,15 @@ class CDQL:
         self.model.grad_update_num +=1
         
 
-    def train(self, num_decisions=200): #200
+    def train(self, sweep_var, num_decisions=250): #200
         """Train q networks
         Args:
             num_decisions: Number of decisions to train algorithm for
         """
         # os.system("mkdir -p " + self.folder_name + "testing!")
-        episodes = 200
+        episodes = 350 #400
         e = np.arange(episodes)
-        T = 180 # choosing how fast to move from exploration to exploitation
+        T = 300 # 380, choosing how fast to move from exploration to exploitation
         eps = -np.log10(e/T)
         self.epsilon = np.clip(eps,0.05,1) # clipping to ensure all values are between 0 and 1
         update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len)
@@ -193,9 +195,9 @@ class CDQL:
             # filename = episode_folder_name + str(i)
 
             # warmup
-            b, k_n0 = self.init
-            state = [0]*self.delay_embed_len*2
-            self.sim_controller.initialize(b, k_n0)
+            b = self.init
+            state = [0]*self.delay_embed_len*3
+            self.sim_controller.initialize(b)
             _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
             for k in range(1,36+self.delay_embed_len):
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
@@ -209,7 +211,7 @@ class CDQL:
                 action_b = self.b_actions[self.b_index[action_index]]
 
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-                state, reward = self.sim_controller.get_state_reward(state, cell_count, action_b)
+                state, reward = self.sim_controller.get_state_reward(state, cell_count, action_b/max(self.b_actions))
                 transition_to_add.extend([[reward], copy.deepcopy(state)])
                 self.buffer.push(*list(transition_to_add))
                 self._update()
@@ -218,12 +220,14 @@ class CDQL:
 
             if (i % 10 == 0) or (i == episodes-1):
                 self.eval(i)
-                plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, update_plot.folder_name_test,
+                self._save_data(update_plot.folder_name, sweep_var, i)
+                if i == episodes-1:
+                    plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, update_plot.folder_name_test,
                                    self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target)
-                self._save_data(update_plot.folder_name, i)
 
 
-    def eval(self, episode, num_decisions=200, num_evals=50): #200, 50
+
+    def eval(self, episode, num_decisions=250, num_evals=30): #200, 50
         """Given trained q networks, generate trajectories
         """
         update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len)
@@ -232,6 +236,8 @@ class CDQL:
 
         extinct_times = []
         extinct_count = 0
+        max_cross_corr = []
+        lag = []
 
         b_all = np.zeros((num_decisions+self.delay_embed_len,1))
         cell_count_all = np.zeros((num_decisions+self.delay_embed_len,1))
@@ -260,6 +266,16 @@ class CDQL:
                     ind = np.where(cell_count_all == 0)[0][0]
                     extinct_times.append(t_all[ind])
                     extinct_count +=1
+                    ind +=1
+                else:
+                    ind = b_all.size
+                # compute max cross correlation and lag
+                n_points = ind
+                cross_corr = signal.correlate(b_all[:ind] - np.mean(b_all[:ind]), kn0_all[:ind] - np.mean(kn0_all[:ind]), mode='full')
+                cross_corr /= (np.std(b_all[:ind]) * np.std(kn0_all[:ind]) * n_points)  # Normalize
+                max_cross_corr.append(np.max(cross_corr))
+                lags = signal.correlation_lags(b_all[:ind].size,kn0_all[:ind].size, mode="full")
+                lag.append(lags[np.argmax(cross_corr)])
                 i+=1
             else:
                 b, cell_count, t, kn0, rewards, Q1, Q1_target, Q2, Q2_target = r
@@ -277,6 +293,16 @@ class CDQL:
                     ind = np.where(cell_count == 0)[0][0]
                     extinct_times.append(t[ind])
                     extinct_count +=1
+                    ind +=1
+                else:
+                    ind = b.size
+                # compute max cross correlation and lag
+                n_points = ind
+                cross_corr = signal.correlate(b[:ind] - np.mean(b[:ind]), kn0[:ind] - np.mean(kn0[:ind]), mode='full')
+                cross_corr /= (np.std(b[:ind]) * np.std(kn0[:ind]) * n_points)  # Normalize
+                max_cross_corr.append(np.max(cross_corr))
+                lags = signal.correlation_lags(b[:ind].size,kn0[:ind].size, mode="full")
+                lag.append(lags[np.argmax(cross_corr)])
 
         self.ave_sum_rewards.append(sum_reward.mean())
         self.std_sum_rewards.append(sum_reward.std())
@@ -290,8 +316,14 @@ class CDQL:
             ave_ext_time = sum(extinct_times)/len(extinct_times)
         else:
             ave_ext_time = np.Inf
-        append = episode != -1 # write over previous .txt file if new training run
-        save_results(episode, extinct_count/num_evals, ave_ext_time, update_plot.folder_name, append=append)
+
+        # log via wandb
+        wandb.log({"extinct_fraction": extinct_count/num_evals,
+            "ave_ext_rate": 1/ave_ext_time,
+            "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
+            "ave_corr_lag": sum(lag)/len(lag),
+            "ave total reward": sum_reward.mean(),
+            "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
         update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
@@ -299,9 +331,9 @@ class CDQL:
 
     def rollout(self, b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions, Q1_all, Q1_target_all, Q2_all, Q2_target_all):
         # warmup
-        b, k_n0 = self.init
-        state = [0]*self.delay_embed_len*2
-        self.sim_controller.initialize(b, k_n0)
+        b = self.init
+        state = [0]*self.delay_embed_len*3
+        self.sim_controller.initialize(b)
         t, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
@@ -319,7 +351,7 @@ class CDQL:
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j+self.delay_embed_len] = self.sim_controller.get_state_reward(state, cell_count, action_b)
+            state, rewards_all[j+self.delay_embed_len] = self.sim_controller.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
             b_all[j+self.delay_embed_len] = action_b
             cell_count_all[j+self.delay_embed_len] = cell_count[-1]
@@ -331,7 +363,8 @@ class CDQL:
         return b_all, cell_count_all, t_all, kn0_all, rewards_all, Q1_all, Q1_target_all, Q2_all, Q2_target_all
 
 if __name__ == "__main__":
-    torch.manual_seed(0)
-    c = CDQL()
-    # c.load_data()
-    c.train()
+    pass
+    # torch.manual_seed(0)
+    # c = CDQL()
+    # # c.load_data()
+    # c.train()

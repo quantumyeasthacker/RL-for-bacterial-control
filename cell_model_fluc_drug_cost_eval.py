@@ -4,7 +4,7 @@ import random
 
 
 class Cell_Population:
-    def __init__(self, num_cells_init, delta_t, omega):
+    def __init__(self, num_cells_init, delta_t, omega, kn0_mean, T):
         self.init_conditions = []
         self.t_start = []
         self.t_stop = []
@@ -29,6 +29,10 @@ class Cell_Population:
         self.alpha = 1.54
         self.beta = 10.5
         self.K_u = 0.076
+
+        self.kn0_mean = kn0_mean
+        self.sigma_kn0 = 0
+        self.T = T
 
 
     # defining regulatory functions and their derivatives
@@ -95,6 +99,15 @@ class Cell_Population:
         dvdt = self.GrowthRate(a, phi_R, U) * V
         return dvdt
 
+    def dkn0dt(self, t, k_n0):
+        tau = 3
+        Amp = 2
+        phase = 0
+
+        drift = Amp*np.sin(t*2*np.pi/self.T + phase) + self.kn0_mean
+        dkdt = -(1/tau)*(k_n0 - drift)
+        return dkdt
+
 
     def integrate(self, Species, t, dt, b):
         # numerically solve via Euler-Maruyama method
@@ -109,8 +122,7 @@ class Cell_Population:
             a = 1e-7
 
         # adding noise to kn0
-        sigma = 0.01
-        self.k_n0 = self.k_n0 + np.sqrt(2*sigma)*np.sqrt(dt)*np.random.normal()
+        self.k_n0 = self.k_n0 + self.dkn0dt(t, self.k_n0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
         self.k_n0 = np.clip(self.k_n0, 0.1, 5.0) # clipping values to keep in physiological range
 
         # adding noise to U
@@ -140,11 +152,12 @@ class Cell_Population:
                 self.f_R(x[0],x[2]) - x[1],
                 self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
 
-    def initialize(self, b, k_n0):
-        self.k_n0 = k_n0
+    def initialize(self, b):
+        # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
+        self.k_n0 = self.kn0_mean
 
         # solving for initial conditions to produce steady state
-        a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(k_n0,b)) # requires guess of initial conditions
+        a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
         phi_S0 = self.f_S(U0)
         ls = [a0,phi_R0,U0,phi_S0]
         if not all(val >= 0 for val in ls):
@@ -323,9 +336,11 @@ class Cell_Population:
 
 
     def get_state_reward(self, state, cell_count, b):
-        # separating state vector 
-        state_gr = state[:10]
-        state_kn0 = state[10:]
+        # separating state vector
+        state_gr, state_kn0, state_act = np.array_split(state, 3)
+        state_gr = state_gr.tolist()
+        state_kn0 = state_kn0.tolist()
+        state_act = state_act.tolist()
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
@@ -339,8 +354,10 @@ class Cell_Population:
         state_gr.append(growth_rate)
         state_kn0.pop(0)
         state_kn0.append(self.k_n0)
+        state_act.pop(0)
+        state_act.append(b)
 
-        state = state_gr + state_kn0
+        state = state_gr + state_kn0 + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
         return [state, cost]
