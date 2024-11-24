@@ -19,8 +19,9 @@ class Cell_Population:
         self.a_t = 1e-4 # amino acid level for efficient peptide elongation, Scott et al. 2014
         self.n_f = 2 # cooperativity in feedback
         self.n_g = 2
+        # Kratz and Banerjee 2023
         self.sigma = 0.015 # noise strength
-        self.alphaX = 4.5 # Kratz and Banerjee 2023
+        self.alphaX = 4.5
         self.betaX = 1.1
         self.mu = 0.6
         self.k_t0 = 2.7 # translational efficiency
@@ -109,21 +110,17 @@ class Cell_Population:
         return dkdt
 
 
-    def integrate(self, Species, t, dt, b):
+    def integrate(self, Species, t, dt, b, k_n0):
         # numerically solve via Euler-Maruyama method
         phiR_i,phiS_i,a_i,U_i,X_i,V_i = Species
 
         phi_R = phiR_i + self.dphiR_dt(phiR_i, t, a_i, U_i)*dt
         phi_S = phiS_i + self.dphiS_dt(phiS_i, t, a_i, phiR_i, U_i)*dt
-        a = a_i + self.dAAdt(a_i, t, phiR_i, phiS_i, U_i, self.k_n0)*dt
+        a = a_i + self.dAAdt(a_i, t, phiR_i, phiS_i, U_i, k_n0)*dt
         # ensure that amino acid conc. is not negative
         if a < 1e-7:
             print('Warning: amino acid conc. went negative and was reset, consider decreasing integration step size')
             a = 1e-7
-
-        # adding noise to kn0
-        self.k_n0 = self.k_n0 + self.dkn0dt(t, self.k_n0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-        self.k_n0 = np.clip(self.k_n0, 0.1, 5.0) # clipping values to keep in physiological range
 
         # adding noise to U
         noise = np.sqrt(2*self.sigma) * np.sqrt(dt) * np.random.normal()
@@ -213,9 +210,9 @@ class Cell_Population:
             X_birth = X_birth[row_ids]
             V_birth = V_birth[row_ids]
             num_cells = threshold
-        elif (num_cells_saved < threshold) & (true_num_cells > threshold):
-            # upsampling if population decreased, but is still above downsample threshold
-            num_cells_add = threshold - num_cells_saved
+        elif (num_cells_saved < threshold) & (true_num_cells > num_cells_saved):
+            # upsampling if population decreased, but is still above number currently being simulated
+            num_cells_add = np.min((threshold-num_cells_saved, true_num_cells-num_cells_saved))
             t_birth = np.ones((threshold,1))*t_birth[0]
             phiR_birth = self.upsample(phiR_birth, num_cells_add, self.phiR_max, self.phiR_min)
             phiS_birth = self.upsample(phiS_birth, num_cells_add, self.phiS_max)
@@ -241,6 +238,14 @@ class Cell_Population:
         phiS_end = np.zeros_like(phiS_birth)
         U_end = np.zeros_like(U_birth)
         X_end = np.zeros_like(X_birth)
+
+        # first simulate nutrient environment
+        k_n0 = np.zeros(iterations)
+        k_n0[0] = self.k_n0
+        for i in range(1,iterations):
+            k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
+        k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
+        self.k_n0 = k_n0[-1]
 
         start = True
         m=0
@@ -270,7 +275,7 @@ class Cell_Population:
 
                 species_0 = [phi_R[i-1], phi_S[i-1], a[i-1], U[i-1], X[i-1], V[i-1]] # packing initial conditions
 
-                phi_R[i], phi_S[i], a[i], U[i], X[i], V[i] = self.integrate(species_0, t[i-1], dt, b) # integrating one timestep
+                phi_R[i], phi_S[i], a[i], U[i], X[i], V[i] = self.integrate(species_0, t[i-1], dt, b, k_n0[i-1]) # integrating one timestep
 
                 X_0 = 1 # amount of division proteins required to trigger division
                 # if cell has added threshold volume amount, it will then divide
