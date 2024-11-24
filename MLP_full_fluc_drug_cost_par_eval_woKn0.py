@@ -3,7 +3,7 @@ import random
 import torch
 import torch.nn as nn
 import numpy as np
-from cell_model_fluc_drug_cost_eval import Cell_Population
+from cell_model_fluc_drug_cost_eval_woKn0 import Cell_Population
 from replaybuffer import ReplayBuffer
 from deepQLnetwork import Model
 from joblib import Parallel, delayed
