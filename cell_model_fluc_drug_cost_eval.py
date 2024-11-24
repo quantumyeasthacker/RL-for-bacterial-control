@@ -212,7 +212,7 @@ class Cell_Population:
             num_cells = threshold
         elif (num_cells_saved < threshold) & (true_num_cells > num_cells_saved):
             # upsampling if population decreased, but is still above number currently being simulated
-            num_cells_add = np.min((threshold-num_cells_saved, true_num_cells-num_cells_saved))
+            num_cells_add = int(np.min((threshold-num_cells_saved, true_num_cells-num_cells_saved)))
             t_birth = np.ones((threshold,1))*t_birth[0]
             phiR_birth = self.upsample(phiR_birth, num_cells_add, self.phiR_max, self.phiR_min)
             phiS_birth = self.upsample(phiS_birth, num_cells_add, self.phiS_max)
