@@ -2,13 +2,10 @@ import numpy as np
 from scipy import integrate, signal, optimize
 import random
 
-# older implementation simulating cell dynamics sequentially
 
 class Cell_Population:
     def __init__(self, num_cells_init, delta_t, omega, kn0_mean, T):
         self.init_conditions = []
-        self.t_start = []
-        self.t_stop = []
         self.num_cells_init = num_cells_init
         self.delta_t = delta_t
         self.omega = omega
@@ -59,7 +56,7 @@ class Cell_Population:
 
     def U_t(self, U):
         ut = 1 - U
-        return max(0, ut)
+        return np.maximum(ut, 0)
 
     def GrowthRate(self, a, phi_R, U):
         # growth rate function
@@ -110,8 +107,7 @@ class Cell_Population:
         dkdt = -(1/tau)*(k_n0 - drift)
         return dkdt
 
-
-    def integrate(self, Species, t, dt, b, k_n0):
+    def MultiIntegrate(self, Species, t, dt, b, k_n0):
         # numerically solve via Euler-Maruyama method
         phiR_i,phiS_i,a_i,U_i,X_i,V_i = Species
 
@@ -119,22 +115,21 @@ class Cell_Population:
         phi_S = phiS_i + self.dphiS_dt(phiS_i, t, a_i, phiR_i, U_i)*dt
         a = a_i + self.dAAdt(a_i, t, phiR_i, phiS_i, U_i, k_n0)*dt
         # ensure that amino acid conc. is not negative
-        if a < 1e-7:
-            print('Warning: amino acid conc. went negative and was reset, consider decreasing integration step size')
-            a = 1e-7
+        a[a < 1e-7] = 1e-7
+        #   print('Warning: amino acid conc. went negative and was reset, consider decreasing integration step size')
 
         # adding noise to U
-        noise = np.sqrt(2*self.sigma) * np.sqrt(dt) * np.random.normal()
+        noise = np.sqrt(2*self.sigma) * np.sqrt(dt) * np.random.normal(size=U_i.shape)
         U = U_i + self.dUdt(U_i, t, phiS_i, phiR_i, a_i, b)*dt + noise
         # check to make sure value is physical
-        if U < 0 or b == 0:
-            U = 0
+        if b == 0:
+            U[:] = 0
+        U[U < 0] = 0
 
         X = X_i + self.dXdt(X_i, t, a_i, phiR_i, V_i, U_i)*dt
         V = V_i + self.dVdt(V_i, t, a_i, phiR_i, U_i)*dt
 
-        return phi_R,phi_S,a,U,X,V
-
+        return np.array([phi_R,phi_S,a,U,X,V])
 
     # initialize simulation
 
@@ -163,14 +158,13 @@ class Cell_Population:
             raise ValueError(f'Initial values are unphysical, change guess of initial conditions')
 
         # initializing each array to save initial conditions for each new trajectory
-        t_birth = np.zeros((self.num_cells_init,1))
-        phiR_birth = np.ones((self.num_cells_init,1))*phi_R0
-        phiS_birth = np.ones((self.num_cells_init,1))*phi_S0
-        a_birth = np.ones((self.num_cells_init,1))*a0
-        U_birth = np.ones((self.num_cells_init,1))*U0
+        phiR_birth = np.ones((self.num_cells_init))*phi_R0
+        phiS_birth = np.ones((self.num_cells_init))*phi_S0
+        a_birth = np.ones((self.num_cells_init))*a0
+        U_birth = np.ones((self.num_cells_init))*U0
         # assigning random initial cell volume, in um^3
-        V_birth = np.zeros((self.num_cells_init,1))
-        X_birth = np.zeros((self.num_cells_init,1))
+        V_birth = np.zeros((self.num_cells_init))
+        X_birth = np.zeros((self.num_cells_init))
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
         for i in range(self.num_cells_init):
 
@@ -180,13 +174,13 @@ class Cell_Population:
 
             X_birth[i] = self.f_X(a0,U0)*V_birth[i]*0.5
 
-        self.init_conditions = (t_birth, phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth)
+        self.init_conditions = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         self.t_start = 0
         self.t_stop = self.delta_t
 
     def upsample(self, val_array, num_cells_add, clip_high=0.99, clip_low=0):
         samples = np.random.normal(np.mean(val_array), np.std(val_array), num_cells_add)
-        val_array = np.concatenate((val_array,samples.reshape(len(samples),1)))
+        val_array = np.concatenate((val_array, samples), -1)
         return val_array.clip(clip_low, clip_high)
 
     # simulatation implementation
@@ -194,16 +188,15 @@ class Cell_Population:
     def simulate_population(self, true_num_cells, b, n_steps=3000, threshold=50):
 
         # unpacking initial conditions for each cell trajectory
-        t_birth, phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth = self.init_conditions
+        phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth = self.init_conditions.copy()
         if any(np.isnan(a_birth)) or any(a_birth < 0): # checking to make sure nan values are not present
             print('a_start:',a_birth)
             raise ValueError(f'Simulation error, nan or negative values present')
-        num_cells_saved = len(t_birth)
+        num_cells_saved = len(V_birth)
 
         if num_cells_saved > threshold:
             # downsampling if population exceeds threshold
-            row_ids = random.sample(range(num_cells_saved-1), threshold)
-            t_birth = t_birth[row_ids]
+            row_ids = random.sample(range(num_cells_saved), threshold)
             phiR_birth = phiR_birth[row_ids]
             phiS_birth = phiS_birth[row_ids]
             a_birth = a_birth[row_ids]
@@ -215,7 +208,6 @@ class Cell_Population:
             # upsampling if population decreased, but is still above number currently being simulated
             num_cells_add = int(np.min((threshold-num_cells_saved, true_num_cells-num_cells_saved)))
             num_cells = int(num_cells_saved+num_cells_add)
-            t_birth = np.ones((num_cells,1))*t_birth[0]
             phiR_birth = self.upsample(phiR_birth, num_cells_add, self.phiR_max, self.phiR_min)
             phiS_birth = self.upsample(phiS_birth, num_cells_add, self.phiS_max)
             a_birth = self.upsample(a_birth, num_cells_add, clip_low=1e-7)
@@ -228,17 +220,7 @@ class Cell_Population:
         iterations = int((self.t_stop - self.t_start)*n_steps)
         t = np.linspace(self.t_start,self.t_stop,iterations)
         dt = (self.t_stop - self.t_start)/iterations
-        cell_count = np.ones(iterations) * num_cells
-        cell_birth = np.zeros(iterations)
-        cell_death = np.zeros(iterations)
-
-        t_end = np.zeros_like(t_birth)
-        V_end = np.zeros_like(V_birth)
-        a_end = np.zeros_like(a_birth)
-        phiR_end = np.zeros_like(phiR_birth)
-        phiS_end = np.zeros_like(phiS_birth)
-        U_end = np.zeros_like(U_birth)
-        X_end = np.zeros_like(X_birth)
+        cell_count = [num_cells]
 
         # first simulate nutrient environment
         k_n0 = np.zeros(iterations)
@@ -247,94 +229,41 @@ class Cell_Population:
             k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
         k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
         self.k_n0 = k_n0[-1]
+        
+        species_stack = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
+        for i in range(1, iterations):
+            species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0[i-1]) # integrating one timestep
 
-        start = True
-        m=0
-        while m < len(t_birth):
-            # start at i=1 so a[i-1]=a0 and phi_R[i-1]=phi_R0
-            i = np.where(t == t_birth[m])[0][0] + 1 # starting at time index corresponding to birth a cell lineage
+            X_0 = 1 # amount of division proteins required to trigger division
+            # if cell has added threshold volume amount, it will then divide
+            birth_check = species_stack[4,:] >= X_0
+            if birth_check.sum() != 0:
+                r = np.random.normal(0.5, 0.04, birth_check.sum())
 
-            V = np.zeros(iterations)
-            V[i-1] = V_birth[m]
+                X_stack_children = species_stack[:,birth_check].copy()
+                X_stack_children[4,:] = 0
+                X_stack_children[5,:] = X_stack_children[5,:] * (1 - r)
 
-            phi_R = np.zeros(iterations)
-            phi_R[i-1] = phiR_birth[m]
+                species_stack[4,birth_check] = 0
+                species_stack[5,birth_check] = species_stack[5,birth_check] * r
 
-            phi_S = np.zeros(iterations)
-            phi_S[i-1] = phiS_birth[m]
+                species_stack = np.concatenate((species_stack, X_stack_children), -1)
 
-            a = np.zeros(iterations)
-            a[i-1] = a_birth[m]
+            # if cell has accumulated sufficient damage, it will die
+            death_check = species_stack[3,:] >= 1
+            if death_check.sum() != 0:
+                species_stack = species_stack[:,~death_check]
 
-            U = np.zeros(iterations)
-            U[i-1] = U_birth[m]
+            cell_count.append(species_stack.shape[1])
+            if cell_count[-1] == 0:
+                break
 
-            X = np.zeros(iterations)
-            X[i-1] = X_birth[m]
-
-            while i < iterations:
-
-                species_0 = [phi_R[i-1], phi_S[i-1], a[i-1], U[i-1], X[i-1], V[i-1]] # packing initial conditions
-
-                phi_R[i], phi_S[i], a[i], U[i], X[i], V[i] = self.integrate(species_0, t[i-1], dt, b, k_n0[i-1]) # integrating one timestep
-
-                X_0 = 1 # amount of division proteins required to trigger division
-                # if cell has added threshold volume amount, it will then divide
-                if X[i-1] >= X_0:
-
-                    r = np.random.normal(0.5, 0.04) # drawing random value for volume allocation to daughter cell, taken from normal distribution
-                    V[i] = r * V[i-1] # cell volume is divided roughly in half
-
-                    # updating initial conditions arrays
-                    t_birth = np.vstack((t_birth, np.array(t[i])))
-                    V_birth = np.vstack((V_birth, np.array( (1 - r) * V[i-1] )))
-                    a_birth = np.vstack((a_birth, np.array(a[i])))
-                    phiR_birth = np.vstack((phiR_birth, np.array(phi_R[i])))
-                    phiS_birth = np.vstack((phiS_birth, np.array(phi_S[i])))
-                    U_birth = np.vstack((U_birth, np.array(U[i])))
-                    X_birth = np.vstack((X_birth, np.array(0))) # division protein concentration is reset to zero
-
-                    cell_count[i:iterations] +=1 # keeping track of total cell count over time
-                    cell_birth[i] +=1 # recording birth dynamics
-
-                # if cell has accumulated sufficient damage, it will die
-                if U[i-1] >= 1:
-                    cell_count[i:iterations] -=1 # keeping track of total cell count over time
-                    cell_death[i] +=1 # recording death dynamics
-                    i = iterations # if cells dies, exits while loop and simulates next cell
-
-                # saving simulation results for next call
-                if (i == iterations-1) and not start:
-                    t_end = np.vstack((t_end, np.array(t[i])))
-                    V_end = np.vstack((V_end, np.array(V[i])))
-                    a_end = np.vstack((a_end, np.array(a[i])))
-                    phiR_end = np.vstack((phiR_end, np.array(phi_R[i])))
-                    phiS_end = np.vstack((phiS_end, np.array(phi_S[i])))
-                    U_end = np.vstack((U_end, np.array(U[i])))
-                    X_end = np.vstack((X_end, np.array(X[i])))
-
-                if (i == iterations-1) and start:
-                    t_end = np.array(t[i])
-                    V_end = np.array(V[i])
-                    a_end = np.array(a[i])
-                    phiR_end = np.array(phi_R[i])
-                    phiS_end = np.array(phi_S[i])
-                    U_end = np.array(U[i])
-                    X_end = np.array(X[i])
-                    start = False
-
-                i +=1
-            m +=1
-
-        final_conditions = (t_end, phiR_end, phiS_end, a_end, U_end, X_end, V_end)
-        self.init_conditions = final_conditions
-        self.t_start = t[-1]
-        self.t_stop = self.t_start + self.delta_t
-        try: len(t_end)
-        except: cell_count = np.zeros(cell_count.shape)
+        self.init_conditions = species_stack.copy()
+        self.t_start = self.t_stop
+        self.t_stop += self.delta_t
 
         if true_num_cells > threshold:
-            true_num_cells_next = np.round(true_num_cells * (1 + (cell_count[-1] - num_cells) / num_cells))
+            true_num_cells_next = np.round(true_num_cells * (cell_count[-1] / num_cells))
         else:
             true_num_cells_next = cell_count[-1]
 
@@ -367,3 +296,9 @@ class Cell_Population:
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
         return [state, cost]
+    
+# if __name__ == '__main__':
+#     sim_controller = Cell_Population(60, 0.2, 0.02, 2.55, 12)
+#     sim_controller.initialize(0.0)
+#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
+#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
