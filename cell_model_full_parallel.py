@@ -101,9 +101,8 @@ class Cell_Population:
     def dkn0dt(self, t, k_n0):
         tau = 3
         Amp = 2
-        phase = 0
 
-        drift = Amp*np.sin(t*2*np.pi/self.T + phase) + self.kn0_mean
+        drift = Amp*np.sin(t*2*np.pi/self.T + self.phase) + self.kn0_mean
         dkdt = -(1/tau)*(k_n0 - drift)
         return dkdt
 
@@ -148,6 +147,7 @@ class Cell_Population:
     def initialize(self, b):
         # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
         self.k_n0 = self.kn0_mean
+        self.phase = np.random.uniform(0,self.T)
 
         # solving for initial conditions to produce steady state
         a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
@@ -229,7 +229,7 @@ class Cell_Population:
             k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
         k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
         self.k_n0 = k_n0[-1]
-        
+
         species_stack = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         for i in range(1, iterations):
             species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0[i-1]) # integrating one timestep
@@ -296,8 +296,9 @@ class Cell_Population:
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
         return [state, cost]
-    
-# if __name__ == '__main__':
+
+if __name__ == '__main__':
+    pass
 #     sim_controller = Cell_Population(60, 0.2, 0.02, 2.55, 12)
 #     sim_controller.initialize(0.0)
 #     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)

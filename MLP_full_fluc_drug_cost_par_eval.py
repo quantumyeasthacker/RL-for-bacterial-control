@@ -172,7 +172,7 @@ class CDQL:
         if (self.training_iter % self.update_freq) == 0:
             self.model.update_target_nn()
         self.model.grad_update_num +=1
-        
+
 
     def train(self, sweep_var, num_decisions=250): #200
         """Train q networks
@@ -334,7 +334,7 @@ class CDQL:
         b = self.init
         state = [0]*self.delay_embed_len*3
         self.sim_controller.initialize(b)
-        t, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
+        _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
