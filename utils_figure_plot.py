@@ -11,10 +11,10 @@ mpl.rcParams['ps.fonttype'] = 42
 class DynamicUpdate():
     """Plot evaluation trajectories
     """
-    def __init__(self, delta_t, embed_len):
-        self.folder_name = "./Fluc_nutrient"
-        os.system("mkdir " + self.folder_name)
+    def __init__(self, delta_t, embed_len, folder_name):
+        self.folder_name = folder_name
         self.folder_name_test = self.folder_name + "/Eval"
+        os.system("mkdir " + self.folder_name_test)
         self.delta_t = delta_t
         self.embed_len = embed_len
 

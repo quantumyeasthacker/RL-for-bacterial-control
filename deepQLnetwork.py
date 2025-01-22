@@ -72,48 +72,48 @@ class Model:
         self._soft_update(self.q_target_1, self.q_1)
         self._soft_update(self.q_target_2, self.q_2)
 
-    def save_networks(self, folder_name, sweep_var):
+    def save_networks(self, folder_name):
         """
         Save Networks
         """
         torch.save({"model_state_dict": self.q_1.state_dict(),
                     "optimizer_state_dict": self.q_optimizer_1.state_dict()
-                    }, folder_name + "q_1" + str(sweep_var))
+                    }, folder_name + "q_1")
 
         torch.save({"model_state_dict": self.q_2.state_dict(),
                     "optimizer_state_dict": self.q_optimizer_2.state_dict()
-                    }, folder_name + "q_2" + str(sweep_var))
+                    }, folder_name + "q_2")
 
         torch.save({"model_state_dict": self.q_target_1.state_dict()},
-                   folder_name + "q_target_1" + str(sweep_var))
+                   folder_name + "q_target_1")
 
         torch.save({"model_state_dict": self.q_target_2.state_dict()},
-                   folder_name + "q_target_2" + str(sweep_var))
+                   folder_name + "q_target_2")
 
-    def load_networks(self, folder_name="./"):
+    def load_networks(self, folder_name):
         """Loads networks and optimizer state
         Args:
             folder_name: folder from which to load networks from
         """
 
-        q_checkpoint_1 = torch.load(folder_name + "q_1",
+        q_checkpoint_1 = torch.load(folder_name + "/q_1",
                                          map_location=self.device)
         self.q_1.load_state_dict(q_checkpoint_1["model_state_dict"])
         self.q_optimizer_1.load_state_dict(q_checkpoint_1[
             "optimizer_state_dict"])
 
-        q_checkpoint_2 = torch.load(folder_name + "q_2",
+        q_checkpoint_2 = torch.load(folder_name + "/q_2",
                                          map_location=self.device)
         self.q_2.load_state_dict(q_checkpoint_2["model_state_dict"])
         self.q_optimizer_2.load_state_dict(q_checkpoint_2[
             "optimizer_state_dict"])
 
-        q_target_checkpoint_1 = torch.load(folder_name + "q_target_1",
+        q_target_checkpoint_1 = torch.load(folder_name + "/q_target_1",
                                                 map_location=self.device)
         self.q_target_1.load_state_dict(
             q_target_checkpoint_1["model_state_dict"])
 
-        q_target_checkpoint_2 = torch.load(folder_name + "q_target_2",
+        q_target_checkpoint_2 = torch.load(folder_name + "/q_target_2",
                                                 map_location=self.device)
         self.q_target_2.load_state_dict(
             q_target_checkpoint_2["model_state_dict"])

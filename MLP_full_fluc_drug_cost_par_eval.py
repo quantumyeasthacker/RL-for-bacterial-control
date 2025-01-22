@@ -37,7 +37,6 @@ class CDQL:
         else:
             self.device = torch.device('cpu')
         assert (not use_gpu) or (self.device == torch.device('cuda'))
-        self.folder_name = "./"
 
         self.delta_t = delta_t
         self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean, T)
@@ -67,23 +66,24 @@ class CDQL:
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
 
-    def _save_data(self, folder, sweep_var, episode_num):
-        np.save(folder + "/replaybuffer" + str(sweep_var), np.array(self.buffer.buffer, dtype=object))
+    def _save_data(self, episode_num):
+        np.save(self.folder_name + "/replaybuffer", np.array(self.buffer.buffer, dtype=object))
 
-        self.model.save_networks(folder+'/', sweep_var)
+        self.model.save_networks(self.folder_name+'/')
         self.save_episode_num(episode_num)
-    
-    def save_episode_num(self, episode_num, filename='episode_num.txt'):
+
+    def save_episode_num(self, episode_num, filename='/episode_num.txt'):
         filename = self.folder_name + filename
         with open(filename,"w") as file:
             file.write(str(episode_num))
 
-    def load_data(self, folder_name="./Fluc_nutrient/"):
-        self.buffer.load_buffer(folder_name + "replaybuffer.npy")
-        self.model.load_networks(folder_name)
+    def load_data(self, sweep_var, folder_name="./Results"):
+        self.folder_name = folder_name + str(sweep_var)
+        self.buffer.load_buffer(self.folder_name + "/replaybuffer.npy")
+        self.model.load_networks(self.folder_name)
         self.episode_num = self.load_episode_num()
-    
-    def load_episode_num(self, filename='episode_num.txt'):
+
+    def load_episode_num(self, filename='/episode_num.txt'):
         filename = self.folder_name + filename
         try:
             with open(filename, "r") as file:
@@ -179,13 +179,15 @@ class CDQL:
         Args:
             num_decisions: Number of decisions to train algorithm for
         """
-        # os.system("mkdir -p " + self.folder_name + "testing!")
+        self.folder_name = "./Results" + str(sweep_var)
+        os.system("mkdir " + self.folder_name)
+        self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name)
+
         episodes = 350 #400
         e = np.arange(episodes)
         T = 300 # 380, choosing how fast to move from exploration to exploitation
         eps = -np.log10(e/T)
         self.epsilon = np.clip(eps,0.05,1) # clipping to ensure all values are between 0 and 1
-        update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len)
 
         for i in range(self.episode_num,episodes):
             print("Episode: ", i)
@@ -220,9 +222,9 @@ class CDQL:
 
             if (i % 10 == 0) or (i == episodes-1):
                 self.eval(i)
-                self._save_data(update_plot.folder_name, sweep_var, i)
+                self._save_data(i)
                 if i == episodes-1:
-                    plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, update_plot.folder_name_test,
+                    plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, self.update_plot.folder_name_test,
                                    self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target)
 
 
@@ -230,8 +232,6 @@ class CDQL:
     def eval(self, episode, num_decisions=250, num_evals=30): #200, 50
         """Given trained q networks, generate trajectories
         """
-        update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len)
-        os.system("mkdir " + update_plot.folder_name_test)
         print("Evaluation")
 
         extinct_times = []
@@ -326,7 +326,7 @@ class CDQL:
             "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
-        update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
+        self.update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
 
 
     def rollout(self, b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions, Q1_all, Q1_target_all, Q2_all, Q2_target_all):
