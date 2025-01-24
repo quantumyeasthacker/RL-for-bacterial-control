@@ -270,7 +270,7 @@ class Cell_Population:
         return t, [true_num_cells, true_num_cells_next]
 
 
-    def get_state_reward(self, state, cell_count, b):
+    def get_reward_all(self, state, cell_count, b):
         # separating state vector
         state_gr, state_kn0, state_act = np.array_split(state, 3)
         state_gr = state_gr.tolist()
@@ -293,6 +293,54 @@ class Cell_Population:
         state_act.append(b)
 
         state = state_gr + state_kn0 + state_act
+        cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
+
+        return [state, cost]
+
+    def get_reward_no_antibiotic(self, state, cell_count, b):
+        # separating state vector
+        state_gr, state_kn0 = np.array_split(state, 2)
+        state_gr = state_gr.tolist()
+        state_kn0 = state_kn0.tolist()
+
+        p_init = cell_count[0]
+        p_final = cell_count[-1]
+
+        if p_final == 0:
+            growth_rate = -10
+        else:
+            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+        # dropping oldest values and replacing with newest ones
+        state_gr.pop(0) 
+        state_gr.append(growth_rate)
+        state_kn0.pop(0)
+        state_kn0.append(self.k_n0)
+
+        state = state_gr + state_kn0
+        cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
+
+        return [state, cost]
+
+    def get_reward_no_nutrient(self, state, cell_count, b):
+        # separating state vector
+        state_gr, state_act = np.array_split(state, 2)
+        state_gr = state_gr.tolist()
+        state_act = state_act.tolist()
+
+        p_init = cell_count[0]
+        p_final = cell_count[-1]
+
+        if p_final == 0:
+            growth_rate = -10
+        else:
+            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+        # dropping oldest values and replacing with newest ones
+        state_gr.pop(0) 
+        state_gr.append(growth_rate)
+        state_act.pop(0)
+        state_act.append(b)
+
+        state = state_gr + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
         return [state, cost]

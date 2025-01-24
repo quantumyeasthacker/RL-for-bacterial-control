@@ -30,7 +30,9 @@ class CDQL:
             use_gpu=False,
             num_cells_init=60,
             kn0_mean=2.55,
-            T=12):
+            T=12,
+            agent_input="full"):
+
         self.gamma = gamma
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
@@ -48,6 +50,18 @@ class CDQL:
         self.num_actions = self.b_num_actions
         self.model = Model(self.device, num_inputs=self.delay_embed_len*3, num_actions=self.num_actions)
         self.b_index = [0, 1]
+
+        if agent_input == "full":
+            self.get_state_reward = self.sim_controller.get_reward_all
+            self.embed_multiplier = 3
+        elif agent_input == "no_nutrient":
+            self.get_state_reward = self.sim_controller.get_reward_no_nutrient
+            self.embed_multiplier = 2
+        elif agent_input == "no_act":
+            self.get_state_reward = self.sim_controller.get_reward_no_antibiotic
+            self.embed_multiplier = 2
+        else:
+            raise ValueError("Invalid agent_input value.")
 
         self.init = 0.0 # b_init
         self.loss = []
@@ -198,13 +212,13 @@ class CDQL:
 
             # warmup
             b = self.init
-            state = [0]*self.delay_embed_len*3
+            state = [0]*self.delay_embed_len*self.embed_multiplier
             self.sim_controller.initialize(b)
             _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
             for k in range(1,36+self.delay_embed_len):
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
                 if k >= 36:
-                    state, _ = self.sim_controller.get_state_reward(state, cell_count, b)
+                    state, _ = self.get_state_reward(state, cell_count, b)
 
             for j in range(num_decisions):
                 action_index = self._get_action(state, i)
@@ -213,7 +227,7 @@ class CDQL:
                 action_b = self.b_actions[self.b_index[action_index]]
 
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-                state, reward = self.sim_controller.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+                state, reward = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
                 transition_to_add.extend([[reward], copy.deepcopy(state)])
                 self.buffer.push(*list(transition_to_add))
                 self._update()
@@ -263,7 +277,7 @@ class CDQL:
                 min_Q2 = np.array(Q2.min(axis=1))
                 min_Q2_target = np.array(Q2_target.min(axis=1))
                 if not np.all(cell_count_all > 0):
-                    ind = np.where(cell_count_all == 0)[0][0]
+                    ind = np.where(cell_count_all == 0)[0][0] #### double check to make sure this is correct!!!!
                     extinct_times.append(t_all[ind])
                     extinct_count +=1
                     ind +=1
@@ -332,14 +346,14 @@ class CDQL:
     def rollout(self, b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions, Q1_all, Q1_target_all, Q2_all, Q2_target_all):
         # warmup
         b = self.init
-        state = [0]*self.delay_embed_len*3
+        state = [0]*self.delay_embed_len*self.embed_multiplier
         self.sim_controller.initialize(b)
         _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
                 _, Q1_all[k-36,:], Q1_target_all[k-36,:], Q2_all[k-36,:], Q2_target_all[k-36,:] = self._get_action(state, eval=True) # just calling this to save Q value for plot
-                state, rewards_all[k-36] = self.sim_controller.get_state_reward(state, cell_count, b)
+                state, rewards_all[k-36] = self.get_state_reward(state, cell_count, b)
 
                 b_all[k-36] = b
                 cell_count_all[k-36] = cell_count[-1]
@@ -351,7 +365,7 @@ class CDQL:
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j+self.delay_embed_len] = self.sim_controller.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+            state, rewards_all[j+self.delay_embed_len] = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
             b_all[j+self.delay_embed_len] = action_b
             cell_count_all[j+self.delay_embed_len] = cell_count[-1]
