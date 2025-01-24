@@ -25,7 +25,7 @@ class DynamicUpdate():
             if np.all(cell_count[:,i] > 0):
                 ind = cell_count[:,i].size
             else:
-                ind = np.where(cell_count == 0)[0][0] + 1
+                ind = np.where(cell_count == 0)[i][0] + 1
             ax[0].plot(time[:ind,i],b_all[:ind,i])
             ax[1].plot(time[:ind,i],kn0_all[:ind,i])
             ax[2].plot(time[:ind,i], cell_count[:ind,i])
