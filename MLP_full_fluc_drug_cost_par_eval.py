@@ -48,7 +48,6 @@ class CDQL:
         self.b_actions = [0.0, 3.72]
         self.b_num_actions = len(self.b_actions)
         self.num_actions = self.b_num_actions
-        self.model = Model(self.device, num_inputs=self.delay_embed_len*3, num_actions=self.num_actions)
         self.b_index = [0, 1]
 
         if agent_input == "full":
@@ -62,6 +61,8 @@ class CDQL:
             self.embed_multiplier = 2
         else:
             raise ValueError("Invalid agent_input value.")
+
+        self.model = Model(self.device, num_inputs=self.delay_embed_len*self.embed_multiplier, num_actions=self.num_actions)
 
         self.init = 0.0 # b_init
         self.loss = []
