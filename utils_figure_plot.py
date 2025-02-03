@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from scipy import signal
-import wandb
+# import wandb
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['ps.fonttype'] = 42
 
@@ -38,7 +38,7 @@ class DynamicUpdate():
         ax[2].set_xlabel('Time (h)')
         ax[2].set_yscale('log')
         figure.savefig(self.folder_name_test+'/'+str(episode)+'.jpg', dpi=300, bbox_inches='tight')
-        wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
+        # wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
         plt.close()
 
 
@@ -88,5 +88,5 @@ def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_ta
 
     plt.xlabel('num. gradient updates')
     figure.savefig(folder+'/reward_Q_loss.jpg', dpi=300, bbox_inches='tight')
-    wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
+    # wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
     plt.close()
