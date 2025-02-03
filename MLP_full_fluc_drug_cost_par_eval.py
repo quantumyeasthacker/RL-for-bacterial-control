@@ -254,20 +254,9 @@ class CDQL:
         max_cross_corr = []
         lag = []
 
-        b_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        cell_count_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        t_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        kn0_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        rewards_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q1_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q2_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
+        results = Parallel(n_jobs=-1)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
+        # results = [self.rollout(num_decisions) for i in range(num_evals)]
 
-
-        results = Parallel(n_jobs=-1)(delayed(self.rollout)(b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions,
-                                                            Q1_all, Q1_target_all, Q2_all, Q2_target_all)for i in range(num_evals))
-        # results = [self.rollout(b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions, Q1_all, Q1_target_all, Q2_all, Q2_target_all) for i in range(num_evals)]
         i=0
         for r in results:
             if i == 0:
@@ -344,7 +333,17 @@ class CDQL:
         self.update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
 
 
-    def rollout(self, b_all, cell_count_all, t_all, kn0_all, rewards_all, num_decisions, Q1_all, Q1_target_all, Q2_all, Q2_target_all):
+    def rollout(self, num_decisions):
+        b_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        cell_count_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        t_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        kn0_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        rewards_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        Q1_all = np.zeros((num_decisions+self.delay_embed_len,2))
+        Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
+        Q2_all = np.zeros((num_decisions+self.delay_embed_len,2))
+        Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
+
         # warmup
         b = self.init
         state = [0]*self.delay_embed_len*self.embed_multiplier
