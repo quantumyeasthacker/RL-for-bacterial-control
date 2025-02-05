@@ -11,12 +11,11 @@ mpl.rcParams['ps.fonttype'] = 42
 class DynamicUpdate():
     """Plot evaluation trajectories
     """
-    def __init__(self, delta_t, embed_len, folder_name):
+    def __init__(self, delta_t, folder_name):
         self.folder_name = folder_name
         self.folder_name_test = self.folder_name + "/Eval"
         os.system("mkdir " + self.folder_name_test)
         self.delta_t = delta_t
-        self.embed_len = embed_len
 
     def __call__(self, episode, time, cell_count, kn0_all, b_all):
         figure, ax = plt.subplots(3,1)
@@ -30,11 +29,11 @@ class DynamicUpdate():
             ax[1].plot(time[:ind,i],kn0_all[:ind,i])
             ax[2].plot(time[:ind,i], cell_count[:ind,i])
         ax[0].set_ylabel('antibiotic conc.')
-        ax[0].axvline(x=self.delta_t*(36+self.embed_len), linestyle='--', color='k')
+        ax[0].axvline(x=self.delta_t*(36+1), linestyle='--', color='k')
         ax[1].set_ylabel('nutrient conc.')
-        ax[1].axvline(x=self.delta_t*(36+self.embed_len), linestyle='--', color='k')
+        ax[1].axvline(x=self.delta_t*(36+1), linestyle='--', color='k')
         ax[2].set_ylabel('population size')
-        ax[2].axvline(x=self.delta_t*(36+self.embed_len), linestyle='--', color='k')
+        ax[2].axvline(x=self.delta_t*(36+1), linestyle='--', color='k')
         ax[2].set_xlabel('Time (h)')
         ax[2].set_yscale('log')
         figure.savefig(self.folder_name_test+'/'+str(episode)+'.jpg', dpi=300, bbox_inches='tight')
