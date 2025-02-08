@@ -357,8 +357,8 @@ class CDQL:
         # log via wandb
         wandb.log({"extinct_fraction": extinct_count/num_evals,
             "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
-            "ave_corr_lag": sum(lag)/len(lag),
+            "ave_max_cross_corr": ave_max_cross_corr,
+            "ave_corr_lag": ave_corr_lag,
             "ave total reward": sum_reward.mean(),
             "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
