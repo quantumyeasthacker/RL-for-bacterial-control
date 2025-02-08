@@ -317,17 +317,16 @@ class CDQL:
         self.ave_Q1_target.append(min_Q1_target.mean())
         self.ave_Q2_target.append(min_Q2_target.mean())
         self.grad_updates.append(self.model.grad_update_num)
-        # save extinction quantification results
-        if len(extinct_times) > 0:
-            ave_ext_time = sum(extinct_times)/len(extinct_times)
-        else:
-            ave_ext_time = np.Inf
+        # save results
+        ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.Inf
+        ave_max_cross_corr = sum(max_cross_corr)/len(max_cross_corr) if len(max_cross_corr) > 0 else 0
+        ave_corr_lag = sum(lag)/len(lag) if len(lag) > 0 else 0
 
         # log via wandb
         wandb.log({"extinct_fraction": extinct_count/num_evals,
             "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
-            "ave_corr_lag": sum(lag)/len(lag),
+            "ave_max_cross_corr": ave_max_cross_corr,
+            "ave_corr_lag": ave_corr_lag,
             "ave total reward": sum_reward.mean(),
             "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
