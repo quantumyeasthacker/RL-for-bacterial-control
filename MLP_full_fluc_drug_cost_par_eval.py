@@ -2,6 +2,7 @@ import os
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from cell_model_full_parallel import Cell_Population
 from replaybuffer import ReplayBuffer
@@ -108,25 +109,23 @@ class CDQL:
         except FileNotFoundError:
             return 0
 
-    def _get_action(self, state, episode=None, eval=False):
-        """Gets action given some state using epsilon-greedy algorithm
+    def _get_action(self, state, episode=-1, eval=False):
+        """Gets action given some state by sampling MaxEnt policy
         Args:
             state: List defining the state
-            episode: episode number
+            episode: episode number, defaults to the greediest choice
         """
-
-        if not eval:
-            explore = random.random()
-            if (explore < self.epsilon[episode]):
-                action = random.choice(list(range(self.num_actions)))
-                return action
 
         self.model.q_1.eval()
         with torch.no_grad():
             curr_state = self._to_tensor(state)
             curr_state = curr_state.unsqueeze(0)
-            action = torch.argmin(
-                    self.model.q_1(curr_state), dim=1).item()
+            logits = self.model.q_1(curr_state) / self.alpha[episode]
+            action_probs = F.softmax(logits, dim=0) # this is equivalent to Eq. 6 in Haarnoja et al. 2017 (RL with Deep Energy-Based Policies)
+            act_dist = torch.distributions.categorical.Categorical(action_probs)
+            # above two lines can be condensed to: act_dist = torch.distributions.categorical.Categorical(logits=logits)
+            action = act_dist.sample()
+
             if eval:
                 store_Q1 = [self.model.q_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
                 store_Q_target1 = [self.model.q_target_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
@@ -136,13 +135,12 @@ class CDQL:
 
         return (action, store_Q1, store_Q_target1, store_Q2, store_Q_target2) if eval else action
 
-    def _update(self):
-        """Updates q1, q2, q1_target and q2_target networks based on clipped Double Q Learning Algorithm
+    def _update(self, episode):
+        """Updates q1, q2, q1_target and q2_target networks based on soft Double Q Learning Algorithm
         """
         if (len(self.buffer) < self.batch_size):
             return
         self.training_iter += 1
-        # Make sure actor_target and critic_target are in eval mode
         assert not self.model.q_target_1.training
         assert not self.model.q_target_2.training
 
@@ -157,14 +155,14 @@ class CDQL:
         next_state_batch = self._to_tensor(batch.next_state)
 
         with torch.no_grad():
-            # Add noise to smooth out learning
-            Q_next_1 = torch.min(self.model.q_target_1(
-                next_state_batch), dim=1)[0].unsqueeze(1)
-            Q_next_2 = torch.min(self.model.q_target_2(
-                next_state_batch), dim=1)[0].unsqueeze(1)
-            # Use max want to avoid underestimation bias #####
-            Q_next = torch.max(Q_next_1, Q_next_2)
-            Q_expected = reward_batch + self.gamma * Q_next  # No "Terminal State"
+            # calculating the soft value and Q functions using Eqs. 8 and 9 in Haarnoja et al. 2017 (RL with Deep Energy-Based Policies)
+            V_next_1 = self.alpha[episode] * torch.log(torch.sum(torch.exp(
+                self.model.q_target_1(next_state_batch)), dim=1)).unsqueeze(1)
+            V_next_2 = self.alpha[episode] * torch.log(torch.sum(torch.exp(
+                self.model.q_target_2(next_state_batch)), dim=1)).unsqueeze(1)
+            # Use max to avoid underestimation bias
+            V_next = torch.max(V_next_1, V_next_2)
+            Q_expected = reward_batch + self.gamma * V_next  # No "Terminal State"
 
         Q_1 = self.model.q_1(state_batch).gather(1, action_batch)
         Q_2 = self.model.q_2(state_batch).gather(1, action_batch)
@@ -179,17 +177,12 @@ class CDQL:
         self.model.q_optimizer_1.step()
         self.model.q_optimizer_2.step()
 
-        # Q_1_new = self.model.q_1(state_batch).gather(1, action_batch)
-        # print("  %.2f"%Q_expected.min().item())
-        # print("    %.2f"%(Q_1_new - Q_1).min().item())
-        # self.store_Q.append([Q_1.tolist(), Q_2.tolist(), Q_expected.tolist()])
-
         if (self.training_iter % self.update_freq) == 0:
             self.model.update_target_nn()
         self.model.grad_update_num +=1
 
 
-    def train(self, sweep_var, num_decisions=250): #200
+    def train(self, sweep_var, num_decisions=250): ####
         """Train q networks
         Args:
             num_decisions: Number of decisions to train algorithm for
@@ -198,18 +191,14 @@ class CDQL:
         os.system("mkdir " + self.folder_name)
         self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name)
 
-        episodes = 350 #400
+        episodes = 350 ####
         e = np.arange(episodes)
-        T = 300 # 380, choosing how fast to move from exploration to exploitation
-        eps = -np.log10(e/T)
-        self.epsilon = np.clip(eps,0.05,1) # clipping to ensure all values are between 0 and 1
+        T = 300 # choosing how fast to move from exploration to exploitation
+        al = -np.log10(e/T)
+        self.alpha = np.clip(al,0.1,1) # clipping to ensure all values are between 0 and 1
 
         for i in range(self.episode_num,episodes):
             print("Episode: ", i)
-            # episode_folder_name = self.folder_name + "Train/" + str(i) + "/"
-
-            # os.system("mkdir -p " + episode_folder_name)
-            # filename = episode_folder_name + str(i)
 
             # warmup
             b = self.init
@@ -231,7 +220,7 @@ class CDQL:
                 state, reward = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
                 transition_to_add.extend([[reward], copy.deepcopy(state)])
                 self.buffer.push(*list(transition_to_add))
-                self._update()
+                self._update(i)
                 if cell_count[-1] == 0:
                     break
 
@@ -244,7 +233,7 @@ class CDQL:
 
 
 
-    def eval(self, episode, num_decisions=250, num_evals=30): #200, 50
+    def eval(self, episode, num_decisions=250, num_evals=30): ####
         """Given trained q networks, generate trajectories
         """
         print("Evaluation")
@@ -324,12 +313,12 @@ class CDQL:
             ave_ext_time = np.Inf
 
         # log via wandb
-        wandb.log({"extinct_fraction": extinct_count/num_evals,
-            "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
-            "ave_corr_lag": sum(lag)/len(lag),
-            "ave total reward": sum_reward.mean(),
-            "ave min Q1": min_Q1.mean()})
+        # wandb.log({"extinct_fraction": extinct_count/num_evals,
+        #     "ave_ext_rate": 1/ave_ext_time,
+        #     "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
+        #     "ave_corr_lag": sum(lag)/len(lag),
+        #     "ave total reward": sum_reward.mean(),
+        #     "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
         self.update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
@@ -377,10 +366,3 @@ class CDQL:
                 break
 
         return b_all, cell_count_all, t_all, kn0_all, rewards_all, Q1_all, Q1_target_all, Q2_all, Q2_target_all
-
-if __name__ == "__main__":
-    pass
-    # torch.manual_seed(0)
-    # c = CDQL()
-    # # c.load_data()
-    # c.train()
