@@ -313,12 +313,12 @@ class CDQL:
             ave_ext_time = np.Inf
 
         # log via wandb
-        # wandb.log({"extinct_fraction": extinct_count/num_evals,
-        #     "ave_ext_rate": 1/ave_ext_time,
-        #     "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
-        #     "ave_corr_lag": sum(lag)/len(lag),
-        #     "ave total reward": sum_reward.mean(),
-        #     "ave min Q1": min_Q1.mean()})
+        wandb.log({"extinct_fraction": extinct_count/num_evals,
+            "ave_ext_rate": 1/ave_ext_time,
+            "ave_max_cross_corr": sum(max_cross_corr)/len(max_cross_corr),
+            "ave_corr_lag": sum(lag)/len(lag),
+            "ave total reward": sum_reward.mean(),
+            "ave min Q1": min_Q1.mean()})
         # select five trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
         self.update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
