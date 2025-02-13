@@ -32,6 +32,7 @@ class RNN(nn.Module):
         Returns:
             - prev_state (:obj:`torch.Tensor`): Preprocessed previous state for the LSTM batch.
         """
+
         seq_len, batch_size = inputs.shape[:2]
         # print('seqlen,batchsize',seq_len,batch_size)
 
@@ -71,6 +72,9 @@ class RNN(nn.Module):
             # print('lstm state',state)
 
             prev_state = [torch.cat(t, dim=1) for t in state]
+            if self.rnn_type == "GRU":
+                prev_state = prev_state[0]
+
         elif isinstance(prev_state, dict):
             prev_state = list(prev_state.values())
         else:
@@ -135,13 +139,6 @@ class RNN(nn.Module):
 
     def forward(self, inputs, prev_state):
         prev_state = self._before_forward(inputs, prev_state)
-
-
-
-        prev_state = prev_state[0]
-
-
-
         output, next_state = self.rnn(inputs, prev_state)
         next_state = self._after_forward(next_state, True) # return next_state in list format
         return output, next_state
