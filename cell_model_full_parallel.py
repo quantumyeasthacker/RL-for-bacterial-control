@@ -22,9 +22,9 @@ class Cell_Population:
         self.alphaX = 4.5
         self.betaX = 1.1
         self.mu = 0.6
-        self.k_t0 = 2.7 # translational efficiency
+        self.kt0_mean = 2.7 # translational efficiency
         self.q = 2
-        self.phiS_max = 0.33
+        self.phiSm_mean = 0.33
         self.alpha = 1.54
         self.beta = 10.5
         self.K_u = 0.076
@@ -144,10 +144,19 @@ class Cell_Population:
                 self.f_R(x[0],x[2]) - x[1],
                 self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
 
-    def initialize(self, b):
+    def initialize(self, b, rand_param=False):
         # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
         self.k_n0 = self.kn0_mean
         self.phase = np.random.uniform(0,self.T)
+
+        if rand_param:
+            k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.15*self.kt0_mean)
+            self.k_t0 = k_t0.clip(0,5)
+            phiS_max = np.random.normal(loc=self.phiSm_mean, scale=0.15*self.phiSm_mean)
+            self.phiS_max = phiS_max.clip(0,0.5)
+        else:
+            self.k_t0 = self.kt0_mean
+            self.phiS_max = self.phiSm_mean
 
         # solving for initial conditions to produce steady state
         a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
