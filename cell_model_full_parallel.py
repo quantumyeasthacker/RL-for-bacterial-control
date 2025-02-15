@@ -150,10 +150,10 @@ class Cell_Population:
         self.phase = np.random.uniform(0,self.T)
 
         if rand_param:
-            k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.15*self.kt0_mean)
-            self.k_t0 = k_t0.clip(0,5)
-            phiS_max = np.random.normal(loc=self.phiSm_mean, scale=0.15*self.phiSm_mean)
-            self.phiS_max = phiS_max.clip(0,0.5)
+            k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.1*self.kt0_mean)
+            self.k_t0 = np.clip(k_t0, 1.5,4)
+            phiS_max = np.random.normal(loc=self.phiSm_mean, scale=0.1*self.phiSm_mean)
+            self.phiS_max = np.clip(phiS_max, 0,0.5)
         else:
             self.k_t0 = self.kt0_mean
             self.phiS_max = self.phiSm_mean
