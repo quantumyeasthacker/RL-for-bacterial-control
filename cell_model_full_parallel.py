@@ -174,6 +174,7 @@ class Cell_Population:
         ls = [a0,phi_R0,U0,phi_S0]
         if not all(val >= 0 for val in ls):
             print(ls)
+            print(self.k_t0, self.phiS_max)
             raise ValueError(f'Initial values are unphysical, change guess of initial conditions')
 
         # initializing each array to save initial conditions for each new trajectory
@@ -298,11 +299,9 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
+        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
 
-        if p_final == 0:
-            growth_rate = -10
-        else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -324,11 +323,9 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
+        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
 
-        if p_final == 0:
-            growth_rate = -10
-        else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -348,11 +345,9 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
+        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
 
-        if p_final == 0:
-            growth_rate = -10
-        else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)

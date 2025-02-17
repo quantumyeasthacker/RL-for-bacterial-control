@@ -61,6 +61,7 @@ class CDQL:
         self.model = Model(self.device, num_inputs=self.delay_embed_len*self.embed_multiplier, num_actions=self.num_actions)
 
         self.init = 0.0 # b_init
+        self.max_pop = 1e11 # threshold for terminating episode
         self.loss = []
         self.ave_sum_rewards = []
         self.std_sum_rewards = []
@@ -224,7 +225,7 @@ class CDQL:
                 transition_to_add.extend([[reward], copy.deepcopy(state)])
                 self.buffer.push(*list(transition_to_add))
                 self._update()
-                if cell_count[-1] == 0:
+                if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
                     break
 
             if (i % 10 == 0) or (i == episodes-1):
@@ -364,7 +365,7 @@ class CDQL:
             cell_count_all[j+self.delay_embed_len] = cell_count[-1]
             t_all[j+self.delay_embed_len] = t[-1]
             kn0_all[j+self.delay_embed_len] = self.sim_controller.k_n0
-            if cell_count[-1] == 0:
+            if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
                 break
 
         return b_all, cell_count_all, t_all, kn0_all, rewards_all, Q1_all, Q1_target_all, Q2_all, Q2_target_all
