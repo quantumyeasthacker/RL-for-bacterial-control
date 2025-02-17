@@ -17,10 +17,6 @@ mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
-
-    # later add in learning rate and tau (update rate) as arguments to tune over as well
-    #  - although learning rate and batch size have similar effects
-
     def __init__(self, delay_embed_len=10,
             batch_size=512,
             delta_t=0.2,
@@ -206,10 +202,6 @@ class CDQL:
 
         for i in range(self.episode_num,episodes):
             print("Episode: ", i)
-            # episode_folder_name = self.folder_name + "Train/" + str(i) + "/"
-
-            # os.system("mkdir -p " + episode_folder_name)
-            # filename = episode_folder_name + str(i)
 
             # warmup
             b = self.init

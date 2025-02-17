@@ -143,6 +143,11 @@ class Cell_Population:
         return [self.phiR_ss(x[0],x[2],k_n0) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
                 self.f_R(x[0],x[2]) - x[1],
                 self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
+    
+    def func_0(self, x, k_n0):
+        # function for calculating steady state conditions for given parameters, used if b=0 to reduce complexity
+        return [self.phiR_ss(x[0],0,k_n0) - x[1], # x[0]=a, x[1]=phi_R
+                self.f_R(x[0],0) - x[1]]
 
     def initialize(self, b, rand_param=False):
         # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
@@ -153,14 +158,19 @@ class Cell_Population:
             k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.1*self.kt0_mean)
             self.k_t0 = np.clip(k_t0, 1.5,4)
             phiS_max = np.random.normal(loc=self.phiSm_mean, scale=0.1*self.phiSm_mean)
-            self.phiS_max = np.clip(phiS_max, 0,0.5)
+            self.phiS_max = np.clip(phiS_max, 0.1,0.5)
         else:
             self.k_t0 = self.kt0_mean
             self.phiS_max = self.phiSm_mean
 
         # solving for initial conditions to produce steady state
-        a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
-        phi_S0 = self.f_S(U0)
+        if b > 0:
+            a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
+            phi_S0 = self.f_S(U0)
+        elif b == 0:
+            a0,phi_R0 = optimize.fsolve(self.func_0, [1e-4, 0.3], args=(self.k_n0))
+            U0 = 0.0
+            phi_S0 = 0.0
         ls = [a0,phi_R0,U0,phi_S0]
         if not all(val >= 0 for val in ls):
             print(ls)
