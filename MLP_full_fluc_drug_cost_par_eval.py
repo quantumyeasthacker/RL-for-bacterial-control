@@ -19,7 +19,7 @@ mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
-    def __init__(self, delay_embed_len=10,
+    def __init__(self, delay_embed_len=15,
             batch_size=512,
             delta_t=0.2,
             omega=0.02,
@@ -117,13 +117,14 @@ class CDQL:
         with torch.no_grad():
             curr_state = self._to_tensor(state)
             curr_state = curr_state.unsqueeze(0)
-            logits = self.model.q_1(curr_state) / self.alpha[episode]
+            logits = - self.model.q_1(curr_state) / self.alpha[episode] # negative sign because dealing with cost not reward
             action_probs = F.softmax(logits, dim=0) # this is equivalent to Eq. 6 in Haarnoja et al. 2017 (RL with Deep Energy-Based Policies)
             act_dist = Categorical(action_probs)
             # above two lines can be condensed to: act_dist = Categorical(logits=logits)
             action = act_dist.sample()
 
             if eval:
+                # action = torch.argmax(logits, dim=1).item()
                 store_Q1 = [self.model.q_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
                 store_Q_target1 = [self.model.q_target_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
                 store_Q2 = [self.model.q_2(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
@@ -192,7 +193,7 @@ class CDQL:
         e = np.arange(episodes)
         T = 300 # choosing how fast to move from exploration to exploitation
         al = -np.log10(e/T)
-        self.alpha = np.clip(al,0.1,1) # clipping to ensure all values are between 0 and 1
+        self.alpha = np.clip(al,0.01,1) # clipping to ensure all values are between 0 and 1
 
         for i in range(self.episode_num,episodes):
             print("Episode: ", i)
