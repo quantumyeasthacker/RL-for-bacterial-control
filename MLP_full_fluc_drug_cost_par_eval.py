@@ -3,6 +3,7 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Categorical
 import numpy as np
 from cell_model_full_parallel import Cell_Population
 from replaybuffer import ReplayBuffer
@@ -18,10 +19,6 @@ mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
-
-    # later add in learning rate and tau (update rate) as arguments to tune over as well
-    #  - although learning rate and batch size have similar effects
-
     def __init__(self, delay_embed_len=10,
             batch_size=512,
             delta_t=0.2,
@@ -122,8 +119,8 @@ class CDQL:
             curr_state = curr_state.unsqueeze(0)
             logits = self.model.q_1(curr_state) / self.alpha[episode]
             action_probs = F.softmax(logits, dim=0) # this is equivalent to Eq. 6 in Haarnoja et al. 2017 (RL with Deep Energy-Based Policies)
-            act_dist = torch.distributions.categorical.Categorical(action_probs)
-            # above two lines can be condensed to: act_dist = torch.distributions.categorical.Categorical(logits=logits)
+            act_dist = Categorical(action_probs)
+            # above two lines can be condensed to: act_dist = Categorical(logits=logits)
             action = act_dist.sample()
 
             if eval:
