@@ -110,6 +110,7 @@ class CDQL:
         Args:
             state: List defining the state
             episode: episode number
+            eval: if False, uses epsilon-greedy action selection, otherwise greedy
         """
 
         if not eval:
@@ -152,6 +153,7 @@ class CDQL:
             batch.action).unsqueeze(1).to(torch.int64)
         reward_batch = self._to_tensor(batch.reward)
         next_state_batch = self._to_tensor(batch.next_state)
+        terminal = self._to_tensor(batch.terminal)
 
         with torch.no_grad():
             # Add noise to smooth out learning
@@ -161,7 +163,7 @@ class CDQL:
                 next_state_batch), dim=1)[0].unsqueeze(1)
             # Use max want to avoid underestimation bias #####
             Q_next = torch.max(Q_next_1, Q_next_2)
-            Q_expected = reward_batch + self.gamma * Q_next  # No "Terminal State"
+            Q_expected = reward_batch + self.gamma * Q_next * (1 - terminal)
 
         Q_1 = self.model.q_1(state_batch).gather(1, action_batch)
         Q_2 = self.model.q_2(state_batch).gather(1, action_batch)
@@ -212,7 +214,7 @@ class CDQL:
             for k in range(1,36+self.delay_embed_len):
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
                 if k >= 36:
-                    state, _ = self.get_state_reward(state, cell_count, b)
+                    state, _, _ = self.get_state_reward(state, cell_count, b)
 
             for j in range(num_decisions):
                 action_index = self._get_action(state, i)
@@ -221,8 +223,8 @@ class CDQL:
                 action_b = self.b_actions[self.b_index[action_index]]
 
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-                state, reward = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
-                transition_to_add.extend([[reward], copy.deepcopy(state)])
+                state, reward, terminal = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+                transition_to_add.extend([[reward], copy.deepcopy(state), [terminal]])
                 self.buffer.push(*list(transition_to_add))
                 self._update()
                 if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
@@ -347,7 +349,7 @@ class CDQL:
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
                 _, Q1_all[k-36,:], Q1_target_all[k-36,:], Q2_all[k-36,:], Q2_target_all[k-36,:] = self._get_action(state, eval=True) # just calling this to save Q value for plot
-                state, rewards_all[k-36] = self.get_state_reward(state, cell_count, b)
+                state, rewards_all[k-36], _ = self.get_state_reward(state, cell_count, b)
 
                 b_all[k-36] = b
                 cell_count_all[k-36] = cell_count[-1]
@@ -359,7 +361,7 @@ class CDQL:
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j+self.delay_embed_len] = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+            state, rewards_all[j+self.delay_embed_len], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
             b_all[j+self.delay_embed_len] = action_b
             cell_count_all[j+self.delay_embed_len] = cell_count[-1]

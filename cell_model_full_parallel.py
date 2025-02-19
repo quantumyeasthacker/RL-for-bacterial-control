@@ -312,8 +312,9 @@ class Cell_Population:
 
         state = state_gr + state_kn0 + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
+        terminal = 1 if p_final == 0 else 0
 
-        return [state, cost]
+        return [state, cost, terminal]
 
     def get_reward_no_antibiotic(self, state, cell_count, b):
         # separating state vector
@@ -334,8 +335,9 @@ class Cell_Population:
 
         state = state_gr + state_kn0
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
+        terminal = 1 if p_final == 0 else 0
 
-        return [state, cost]
+        return [state, cost, terminal]
 
     def get_reward_no_nutrient(self, state, cell_count, b):
         # separating state vector
@@ -356,12 +358,9 @@ class Cell_Population:
 
         state = state_gr + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
+        terminal = 1 if p_final == 0 else 0
 
-        return [state, cost]
+        return [state, cost, terminal]
 
 if __name__ == '__main__':
     pass
-#     sim_controller = Cell_Population(60, 0.2, 0.02, 2.55, 12)
-#     sim_controller.initialize(0.0)
-#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
-#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
