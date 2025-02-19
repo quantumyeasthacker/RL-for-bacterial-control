@@ -9,6 +9,7 @@ class Cell_Population:
         self.num_cells_init = num_cells_init
         self.delta_t = delta_t
         self.omega = omega
+        self.reward_shift = 10 # shift rewards to all be positive
 
         # parameters
         self.phiR_min = 0
@@ -281,9 +282,9 @@ class Cell_Population:
         p_final = cell_count[-1]
 
         if p_final == 0:
-            growth_rate = -10
+            growth_rate = 0
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -307,9 +308,9 @@ class Cell_Population:
         p_final = cell_count[-1]
 
         if p_final == 0:
-            growth_rate = -10
+            growth_rate = 0
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -331,9 +332,9 @@ class Cell_Population:
         p_final = cell_count[-1]
 
         if p_final == 0:
-            growth_rate = -10
+            growth_rate = 0
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
+            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -347,7 +348,3 @@ class Cell_Population:
 
 if __name__ == '__main__':
     pass
-#     sim_controller = Cell_Population(60, 0.2, 0.02, 2.55, 12)
-#     sim_controller.initialize(0.0)
-#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
-#     t, cell_count = sim_controller.simulate_population(sim_controller.num_cells_init, 4.0)
