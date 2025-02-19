@@ -155,9 +155,9 @@ class CDQL:
         with torch.no_grad():
             # calculating the soft value and Q functions using Eqs. 8 and 9 in Haarnoja et al. 2017 (RL with Deep Energy-Based Policies)
             V_next_1 = self.alpha[episode] * torch.logsumexp(
-                self.model.q_target_1(next_state_batch) / self.alpha[episode], dim=1).unsqueeze(1)
+                - self.model.q_target_1(next_state_batch) / self.alpha[episode], dim=1).unsqueeze(1)
             V_next_2 = self.alpha[episode] * torch.logsumexp(
-                self.model.q_target_2(next_state_batch) / self.alpha[episode], dim=1).unsqueeze(1)
+                - self.model.q_target_2(next_state_batch) / self.alpha[episode], dim=1).unsqueeze(1)
             # Use max to avoid underestimation bias
             V_next = torch.max(V_next_1, V_next_2)
             Q_expected = reward_batch + self.gamma * V_next  # No "Terminal State"
