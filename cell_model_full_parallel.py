@@ -299,7 +299,11 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
+        else:
+            terminal = 0
 
         growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
@@ -312,7 +316,6 @@ class Cell_Population:
 
         state = state_gr + state_kn0 + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
-        terminal = 1 if p_final == 0 else 0
 
         return [state, cost, terminal]
 
@@ -324,7 +327,11 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
+        else:
+            terminal = 0
 
         growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
@@ -335,7 +342,6 @@ class Cell_Population:
 
         state = state_gr + state_kn0
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
-        terminal = 1 if p_final == 0 else 0
 
         return [state, cost, terminal]
 
@@ -347,7 +353,11 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-        p_final = 1e-5 if p_final == 0 else p_final # handling extinction case
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
+        else:
+            terminal = 0
 
         growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
@@ -358,7 +368,6 @@ class Cell_Population:
 
         state = state_gr + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
-        terminal = 1 if p_final == 0 else 0
 
         return [state, cost, terminal]
 
