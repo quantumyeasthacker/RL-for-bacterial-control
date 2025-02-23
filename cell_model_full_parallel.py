@@ -182,17 +182,13 @@ class Cell_Population:
         phiS_birth = np.ones((self.num_cells_init))*phi_S0
         a_birth = np.ones((self.num_cells_init))*a0
         U_birth = np.ones((self.num_cells_init))*U0
+
         # assigning random initial cell volume, in um^3
-        V_birth = np.zeros((self.num_cells_init))
-        X_birth = np.zeros((self.num_cells_init))
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
-        for i in range(self.num_cells_init):
-
-            start_t = random.randint(int(cycle_t),int(cycle_t*100))/100 # assigning random initial cell volume, in um^3
-            birth_size = 1 / self.f_X(a0, U0) # average cell size at birth at initial steady-state growth
-            V_birth[i] = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t)
-
-            X_birth[i] = self.f_X(a0,U0)*V_birth[i]*0.5
+        start_t = np.random.uniform(0,cycle_t, self.num_cells_init) # assigning random initial cell volume, in um^3
+        birth_size = 1 / self.f_X(a0, U0) # average cell size at birth at initial steady-state growth
+        V_birth = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t)
+        X_birth = self.f_X(a0,U0)*V_birth*0.5
 
         self.init_conditions = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         self.t_start = 0
