@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from scipy import signal
-# import wandb
+import wandb
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['ps.fonttype'] = 42
 
@@ -11,12 +11,13 @@ mpl.rcParams['ps.fonttype'] = 42
 class DynamicUpdate():
     """Plot evaluation trajectories
     """
-    def __init__(self, delta_t, embed_len, folder_name):
+    def __init__(self, delta_t, embed_len, folder_name, max_pop):
         self.folder_name = folder_name
         self.folder_name_test = self.folder_name + "/Eval"
         os.system("mkdir " + self.folder_name_test)
         self.delta_t = delta_t
         self.embed_len = embed_len
+        self.max_pop = max_pop
 
     def __call__(self, episode, time, cell_count, kn0_all, b_all):
         figure, ax = plt.subplots(3,1)
@@ -25,7 +26,10 @@ class DynamicUpdate():
             if np.all(cell_count[:,i] > 0):
                 ind = cell_count[:,i].size
             else:
-                ind = np.where(cell_count[:,i] == 0)[0][0] + 1
+                if np.all(cell_count[:,i] <= self.max_pop):
+                    ind = np.where(cell_count[:,i] == 0)[0][0] + 1
+                else:
+                    ind = np.where(cell_count[:,i] == 0)[0][0]
             ax[0].plot(time[:ind,i],b_all[:ind,i])
             ax[1].plot(time[:ind,i],kn0_all[:ind,i])
             ax[2].plot(time[:ind,i], cell_count[:ind,i])
@@ -38,7 +42,7 @@ class DynamicUpdate():
         ax[2].set_xlabel('Time (h)')
         ax[2].set_yscale('log')
         figure.savefig(self.folder_name_test+'/'+str(episode)+'.jpg', dpi=300, bbox_inches='tight')
-        # wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
+        wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
         plt.close()
 
 
@@ -88,5 +92,5 @@ def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_ta
 
     plt.xlabel('num. gradient updates')
     figure.savefig(folder+'/reward_Q_loss.jpg', dpi=300, bbox_inches='tight')
-    # wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
+    wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
     plt.close()

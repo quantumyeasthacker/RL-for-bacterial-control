@@ -195,7 +195,7 @@ class CDQL:
         """
         self.folder_name = "./Results" + str(sweep_var)
         os.system("mkdir " + self.folder_name)
-        self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name)
+        self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name,self.max_pop)
 
         episodes = 350 #400
         e = np.arange(episodes)
