@@ -126,13 +126,13 @@ class CDQL:
             action = torch.argmin(
                     self.model.q_1(curr_state), dim=1).item()
             if eval:
-                store_Q1 = [self.model.q_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
-                store_Q_target1 = [self.model.q_target_1(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
-                store_Q2 = [self.model.q_2(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
-                store_Q_target2 = [self.model.q_target_2(curr_state).squeeze(0)[i].item() for i in range(self.num_actions)]
+                store_minQ1 = self.model.q_1(curr_state).min().numpy()
+                store_minQtarget1 = self.model.q_target_1(curr_state).min().numpy()
+                store_minQ2 = self.model.q_2(curr_state).min().numpy()
+                store_minQtarget2 = self.model.q_target_2(curr_state).min().numpy()
         self.model.q_1.train()
 
-        return (action, store_Q1, store_Q_target1, store_Q2, store_Q_target2) if eval else action
+        return (action, store_minQ1, store_minQtarget1, store_minQ2, store_minQtarget2) if eval else action
 
     def _update(self):
         """Updates q1, q2, q1_target and q2_target networks based on clipped Double Q Learning Algorithm
@@ -188,7 +188,7 @@ class CDQL:
         self.model.grad_update_num +=1
 
 
-    def train(self, sweep_var, num_decisions=250): #200
+    def train(self, sweep_var, num_decisions=250): ###
         """Train q networks
         Args:
             num_decisions: Number of decisions to train algorithm for
@@ -197,9 +197,9 @@ class CDQL:
         os.system("mkdir " + self.folder_name)
         self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name,self.max_pop)
 
-        episodes = 350 #400
+        episodes = 350 ###
         e = np.arange(episodes)
-        T = 300 # 380, choosing how fast to move from exploration to exploitation
+        T = 300 # choosing how fast to move from exploration to exploitation
         eps = -np.log10(e/T)
         self.epsilon = np.clip(eps,0.05,1) # clipping to ensure all values are between 0 and 1
 
@@ -239,7 +239,7 @@ class CDQL:
 
 
 
-    def eval(self, episode, num_decisions=250, num_evals=30): #200, 50
+    def eval(self, episode, num_decisions=250, num_evals=30): ###
         """Given trained q networks, generate trajectories
         """
         print("Evaluation")
@@ -255,12 +255,8 @@ class CDQL:
         i=0
         for r in results:
             if i == 0:
-                b_all, cell_count_all, t_all, kn0_all, rewards_all, Q1, Q1_target, Q2, Q2_target = r
+                b_all, cell_count_all, t_all, kn0_all, rewards_all, min_Q1, min_Q1_target, min_Q2, min_Q2_target = r
                 sum_reward = np.array([rewards_all.sum()])
-                min_Q1 = np.array(Q1.min(axis=1))
-                min_Q1_target = np.array(Q1_target.min(axis=1))
-                min_Q2 = np.array(Q2.min(axis=1))
-                min_Q2_target = np.array(Q2_target.min(axis=1))
                 if not np.all(cell_count_all > 0):
                     ind = np.where(cell_count_all == 0)[0][0]
                     extinct_times.append(t_all[ind])
@@ -285,10 +281,10 @@ class CDQL:
                 kn0_all = np.concatenate((kn0_all,kn0), axis=1)
                 rewards_all = np.concatenate((rewards_all,rewards), axis=1)
                 sum_reward = np.concatenate((sum_reward, np.array([rewards.sum()])))
-                min_Q1 = np.vstack((min_Q1, np.array(Q1.min(axis=1))))
-                min_Q1_target = np.vstack((min_Q1_target, np.array(Q1_target.min(axis=1))))
-                min_Q2 = np.vstack((min_Q2, np.array(Q2.min(axis=1))))
-                min_Q2_target = np.vstack((min_Q2_target, np.array(Q2_target.min(axis=1))))
+                min_Q1 = np.vstack((min_Q1, Q1))
+                min_Q1_target = np.vstack((min_Q1_target, Q1_target))
+                min_Q2 = np.vstack((min_Q2, Q2))
+                min_Q2_target = np.vstack((min_Q2_target, Q2_target))
                 if not np.all(cell_count > 0):
                     ind = np.where(cell_count == 0)[0][0]
                     extinct_times.append(t[ind])
@@ -335,10 +331,10 @@ class CDQL:
         t_all = np.zeros((num_decisions+self.delay_embed_len,1))
         kn0_all = np.zeros((num_decisions+self.delay_embed_len,1))
         rewards_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q1_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q2_all = np.zeros((num_decisions+self.delay_embed_len,2))
-        Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,2))
+        Q1_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        Q2_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
 
         # warmup
         b = self.init
@@ -348,7 +344,7 @@ class CDQL:
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
-                _, Q1_all[k-36,:], Q1_target_all[k-36,:], Q2_all[k-36,:], Q2_target_all[k-36,:] = self._get_action(state, eval=True) # just calling this to save Q value for plot
+                _, Q1_all[k-36], Q1_target_all[k-36], Q2_all[k-36], Q2_target_all[k-36] = self._get_action(state, eval=True) # just calling this to save Q value for plot
                 state, rewards_all[k-36], _ = self.get_state_reward(state, cell_count, b)
 
                 b_all[k-36] = b
