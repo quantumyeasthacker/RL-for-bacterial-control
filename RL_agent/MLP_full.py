@@ -72,17 +72,19 @@ class CDQL(object):
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
     
-    def _save_data(self, folder_name):
+    def _save_data(self, folder_name, replay_buffer = True):
         self.model.save_networks(folder_name)
-        np.save(os.path.join(folder_name, "replaybuffer.npy"), np.array(self.buffer.buffer, dtype=object))
+        if replay_buffer:
+            np.save(os.path.join(folder_name, "replaybuffer.npy"), np.array(self.buffer.buffer, dtype=object))
         # with open(os.path.join(folder_name, "replaybuffer.pkl"), "wb") as f:
         #     pickle.dump(self.buffer.buffer, f)
         # with open(os.path.join(folder_name, "episode_num.txt"), "w") as f:
         #     f.write(str(self.episode_num))
 
-    def load_data(self, folder_name):
+    def load_data(self, folder_name, replay_buffer = True):
         self.model.load_networks(folder_name)
-        self.buffer.load_buffer(os.path.join(folder_name, "replaybuffer.npy"))
+        if replay_buffer:
+            self.buffer.load_buffer(os.path.join(folder_name, "replaybuffer.npy"))
         # with open(os.path.join(folder_name, "replaybuffer.pkl"), "rb") as f:
         #     self.buffer = pickle.load(f)
         # try:
@@ -191,8 +193,8 @@ class CDQL(object):
         max_cross_corr = []
         lag = []
 
-        # results = Parallel(n_jobs=10)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
-        results = [self.rollout(num_decisions) for _ in range(num_evals)]
+        results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for i in range(num_evals))
+        # results = [self.eval_step(num_decisions) for _ in range(num_evals)]
         sum_reward = []
         Q_values_stack = []
         info_stack = []
@@ -236,7 +238,7 @@ class CDQL(object):
         # select five trajectories randomly to plot
         plot_trajectory(random.sample(info_stack, 5), episode, os.path.join(folder_name,"Eval"))
 
-    def rollout(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
+    def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
         obs, _ = self.env.reset()
         rewards = []
         Q_values = []
