@@ -3,6 +3,7 @@ import copy
 import warnings
 from dataclasses import dataclass, field
 from cell_model import Cell_Population, CellConfig
+from typing import Dict, Mapping, Optional, Tuple, Any, Union
 
 
 @dataclass
@@ -27,15 +28,15 @@ class EnvConfig:
     b_actions: list[int] = field(default_factory=list)
 
     # constant nutrient environmental parameters
-    k_n0_constant: float = None
+    k_n0_constant: Optional[float] = None
     
     # variable nutrient environmental parameters
-    T_k_n0: float = 6
-    k_n0_mean: float = 2.55
-    sigma_kn0: float = 0
+    T_k_n0: Optional[float] = 6
+    k_n0_mean: Optional[float] = 2.55
+    sigma_kn0: Optional[float] = 0
 
     # control of nutrient environmental parameters
-    k_n0_actions: list[float] = field(default_factory=list)
+    k_n0_actions: Optional[list[float]] = field(default_factory=list)
 
 
 class BaseEnv(object):
