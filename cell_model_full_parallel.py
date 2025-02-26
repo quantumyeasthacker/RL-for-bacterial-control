@@ -1,10 +1,10 @@
 import numpy as np
 from scipy import integrate, signal, optimize
 import random
-
+import copy
 
 class Cell_Population:
-    def __init__(self, num_cells_init, delta_t, omega, kn0_mean, T):
+    def __init__(self, num_cells_init, delta_t, omega, kn0_mean=None, T=None):
         self.init_conditions = []
         self.num_cells_init = num_cells_init
         self.delta_t = delta_t
@@ -143,16 +143,18 @@ class Cell_Population:
         return [self.phiR_ss(x[0],x[2],k_n0) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
                 self.f_R(x[0],x[2]) - x[1],
                 self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
-    
+
     def func_0(self, x, k_n0):
         # function for calculating steady state conditions for given parameters, used if b=0 to reduce complexity
         return [self.phiR_ss(x[0],0,k_n0) - x[1], # x[0]=a, x[1]=phi_R
                 self.f_R(x[0],0) - x[1]]
 
-    def initialize(self, b, rand_param=False):
-        # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
-        self.k_n0 = self.kn0_mean
-        self.phase = np.random.uniform(0,self.T)
+    def initialize(self, b, k_n0=None, rand_param=False):
+        if k_n0 is None:
+            self.k_n0 = self.kn0_mean
+            self.phase = np.random.uniform(0,self.T)
+        else:
+            self.k_n0 = k_n0
 
         if rand_param:
             k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.1*self.kt0_mean)
@@ -201,7 +203,7 @@ class Cell_Population:
 
     # simulatation implementation
 
-    def simulate_population(self, true_num_cells, b, n_steps=3000, threshold=50):
+    def simulate_population(self, true_num_cells, b, k_n0=None, n_steps=3000, threshold=50):
 
         # unpacking initial conditions for each cell trajectory
         phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth = self.init_conditions.copy()
@@ -239,16 +241,30 @@ class Cell_Population:
         cell_count = [num_cells]
 
         # first simulate nutrient environment
-        k_n0 = np.zeros(iterations)
-        k_n0[0] = self.k_n0
-        for i in range(1,iterations):
-            k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-        k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
-        self.k_n0 = k_n0[-1]
+        # if k_n0 is None:
+        #     k_n0 = np.zeros(iterations)
+        #     k_n0[0] = self.k_n0
+        #     for i in range(1,iterations):
+        #         k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
+        #     k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
+        #     self.k_n0 = k_n0[-1]
+        # else:
+        #     self.k_n0 = k_n0
 
         species_stack = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         for i in range(1, iterations):
-            species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0[i-1]) # integrating one timestep
+            # pass k_n0 through and then have it change depending on length??
+            if k_n0 is None:
+                if i == 1:
+                    kn0 = self.k_n0
+                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, kn0) # integrating one timestep
+                kn0 += self.dkn0dt(t[i-1], kn0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
+                kn0 = np.clip(kn0, 0.1, 5.0) # clipping values to keep in physiological range
+                if i == iterations-1:
+                    self.k_n0 = kn0
+            else:
+                self.k_n0 = k_n0
+                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, self.k_n0) # integrating one timestep
 
             X_0 = 1 # amount of division proteins required to trigger division
             # if cell has added threshold volume amount, it will then divide
@@ -272,6 +288,8 @@ class Cell_Population:
 
             cell_count.append(species_stack.shape[1])
             if cell_count[-1] == 0:
+                self.k_n0 = kn0 # for better plot visualization
+                t = t[:i]
                 break
 
         self.init_conditions = species_stack.copy()
