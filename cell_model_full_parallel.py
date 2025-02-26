@@ -240,20 +240,9 @@ class Cell_Population:
         dt = (self.t_stop - self.t_start)/iterations
         cell_count = [num_cells]
 
-        # first simulate nutrient environment
-        # if k_n0 is None:
-        #     k_n0 = np.zeros(iterations)
-        #     k_n0[0] = self.k_n0
-        #     for i in range(1,iterations):
-        #         k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-        #     k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
-        #     self.k_n0 = k_n0[-1]
-        # else:
-        #     self.k_n0 = k_n0
-
         species_stack = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         for i in range(1, iterations):
-            # pass k_n0 through and then have it change depending on length??
+
             if k_n0 is None:
                 if i == 1:
                     kn0 = self.k_n0
