@@ -250,8 +250,7 @@ class Cell_Population:
                 kn0 += self.dkn0dt(t[i-1], kn0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
                 kn0 = np.clip(kn0, 0.1, 5.0) # clipping values to keep in physiological range
             else:
-                self.k_n0 = k_n0
-                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, self.k_n0) # integrating one timestep
+                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0) # integrating one timestep
 
             # if cell has accumulated sufficient amount of division proteins, it will divide
             birth_check = species_stack[4,:] >= 1
@@ -276,7 +275,7 @@ class Cell_Population:
             if cell_count[-1] == 0:
                 break
 
-        self.k_n0 = kn0
+        self.k_n0 = kn0 if k_n0 is None else k_n0
         self.U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
         self.init_conditions = species_stack.copy()
         self.t_start = self.t_stop

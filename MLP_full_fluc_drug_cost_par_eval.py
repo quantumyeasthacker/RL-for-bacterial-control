@@ -28,6 +28,7 @@ class CDQL:
             agent_input="no_nutrient",
             training_config={}):
 
+        T = training_config["T"]
         self.delay_embed_len = training_config["delay_embed_len"]
         self.folder_name = training_config["folder_name"]
         os.makedirs(self.folder_name, exist_ok=True)
