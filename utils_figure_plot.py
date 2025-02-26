@@ -2,8 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from scipy import signal
-import wandb
+import random
+# import wandb
 mpl.rcParams['pdf.fonttype'] = 42
 mpl.rcParams['ps.fonttype'] = 42
 
@@ -11,28 +11,21 @@ mpl.rcParams['ps.fonttype'] = 42
 class DynamicUpdate():
     """Plot evaluation trajectories
     """
-    def __init__(self, delta_t, embed_len, folder_name, max_pop):
+    def __init__(self, delta_t, embed_len, folder_name):
         self.folder_name = folder_name
         self.folder_name_test = self.folder_name + "/Eval"
         os.system("mkdir " + self.folder_name_test)
         self.delta_t = delta_t
         self.embed_len = embed_len
-        self.max_pop = max_pop
 
-    def __call__(self, episode, time, cell_count, kn0_all, b_all):
+    def __call__(self, episode, time, cell_count, kn0, b, rand_i):
         figure, ax = plt.subplots(3,1)
         figure.subplots_adjust(hspace=.0)
-        for i in range(np.shape(time)[1]):
-            if np.all(cell_count[:,i] > 0):
-                ind = cell_count[:,i].size
-            else:
-                if np.all(cell_count[:,i] <= self.max_pop):
-                    ind = np.where(cell_count[:,i] == 0)[0][0] + 1
-                else:
-                    ind = np.where(cell_count[:,i] == 0)[0][0]
-            ax[0].plot(time[:ind,i],b_all[:ind,i])
-            ax[1].plot(time[:ind,i],kn0_all[:ind,i])
-            ax[2].plot(time[:ind,i], cell_count[:ind,i])
+
+        for i in rand_i:
+            ax[0].plot(time[i],b[i])
+            ax[1].plot(time[i],kn0[i])
+            ax[2].plot(time[i], cell_count[i])
         ax[0].set_ylabel('antibiotic conc.')
         ax[0].axvline(x=self.delta_t*(36+self.embed_len), linestyle='--', color='k')
         ax[1].set_ylabel('nutrient conc.')
@@ -42,31 +35,8 @@ class DynamicUpdate():
         ax[2].set_xlabel('Time (h)')
         ax[2].set_yscale('log')
         figure.savefig(self.folder_name_test+'/'+str(episode)+'.jpg', dpi=300, bbox_inches='tight')
-        wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
+        # wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
         plt.close()
-
-
-        # # compute cross correlation and plot
-        # figure = plt.figure()
-        # for i in range(np.shape(time)[1]):
-        #     if np.all(cell_count[:,i] > 0):
-        #         ind = b_all.shape[0]
-        #     else:
-        #         ind = np.where(cell_count == 0)[0][0] + 1
-        #     n_points = ind
-        #     cross_corr = signal.correlate(b_all[:ind,i] - np.mean(b_all[:ind,i]), kn0_all[:ind,i] - np.mean(kn0_all[:ind,i]), mode='full')
-        #     cross_corr /= (np.std(b_all[:ind,i]) * np.std(kn0_all[:ind,i]) * n_points)  # Normalize
-            
-        #     # Find the lag with the maximum correlation
-        #     lags = signal.correlation_lags(b_all[:ind,i].size,kn0_all[:ind,i].size, mode="full")
-        #     lag = lags[np.argmax(cross_corr)]
-        #     plt.plot(lags, cross_corr)
-        #     plt.axvline(x=lag, linestyle='--', label=f'Max correlation at lag {lag}')
-        # plt.ylim(-1,1)
-        # plt.xlabel("Lag")
-        # plt.ylabel("Cross-correlation")
-        # figure.savefig(self.folder_name_test+'/'+str(episode)+'_corr.jpg', dpi=300, bbox_inches='tight')
-        # plt.close()
 
 
 def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_target, Q2_target):
@@ -92,5 +62,5 @@ def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_ta
 
     plt.xlabel('num. gradient updates')
     figure.savefig(folder+'/reward_Q_loss.jpg', dpi=300, bbox_inches='tight')
-    wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
+    # wandb.log({"plot_reward_Q_loss": wandb.Image(folder+'/reward_Q_loss.jpg')})
     plt.close()

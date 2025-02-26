@@ -17,8 +17,7 @@ mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
-    def __init__(self, delay_embed_len=10,
-            batch_size=512,
+    def __init__(self, batch_size=512,
             delta_t=0.2,
             omega=0.02,
             gamma=0.99,
@@ -26,8 +25,12 @@ class CDQL:
             use_gpu=False,
             num_cells_init=60,
             kn0_mean=2.55,
-            T=12,
-            agent_input="full"):
+            agent_input="no_nutrient",
+            training_config={}):
+
+        self.delay_embed_len = training_config["delay_embed_len"]
+        self.folder_name = training_config["folder_name"]
+        os.makedirs(self.folder_name, exist_ok=True)
 
         self.gamma = gamma
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
@@ -39,7 +42,6 @@ class CDQL:
         self.delta_t = delta_t
         self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean, T)
         self.buffer = ReplayBuffer(1e6)
-        self.delay_embed_len = delay_embed_len
         self.batch_size = batch_size
         self.b_actions = [0.0, 3.72]
         self.b_num_actions = len(self.b_actions)
@@ -140,7 +142,7 @@ class CDQL:
         if (len(self.buffer) < self.batch_size):
             return
         self.training_iter += 1
-        # Make sure actor_target and critic_target are in eval mode
+        # Make sure target networks are in eval mode
         assert not self.model.q_target_1.training
         assert not self.model.q_target_2.training
 
@@ -178,24 +180,19 @@ class CDQL:
         self.model.q_optimizer_1.step()
         self.model.q_optimizer_2.step()
 
-        # Q_1_new = self.model.q_1(state_batch).gather(1, action_batch)
-        # print("  %.2f"%Q_expected.min().item())
-        # print("    %.2f"%(Q_1_new - Q_1).min().item())
-        # self.store_Q.append([Q_1.tolist(), Q_2.tolist(), Q_expected.tolist()])
-
         if (self.training_iter % self.update_freq) == 0:
             self.model.update_target_nn()
         self.model.grad_update_num +=1
 
 
-    def train(self, sweep_var, num_decisions=250): ###
+    def train(self, num_decisions=250): ###
         """Train q networks
         Args:
             num_decisions: Number of decisions to train algorithm for
         """
-        self.folder_name = "./Results" + str(sweep_var)
-        os.system("mkdir " + self.folder_name)
-        self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name,self.max_pop)
+        # self.folder_name = "./Results" + str(sweep_var)
+        # os.system("mkdir " + self.folder_name)
+        self.update_plot = DynamicUpdate(self.delta_t,self.delay_embed_len,self.folder_name)
 
         episodes = 350 ###
         e = np.arange(episodes)
@@ -239,90 +236,61 @@ class CDQL:
 
 
 
-    def eval(self, episode, num_decisions=250, num_evals=30): ###
+    def eval(self, episode, num_decisions=250, num_evals=15): ###
         """Given trained q networks, generate trajectories
         """
         print("Evaluation")
 
         extinct_times = []
         extinct_count = 0
-        max_cross_corr = []
-        lag = []
+        max_cross_corr_kn0 = []
+        max_cross_corr_U = []
+        lag_kn0 = []
+        lag_U = []
 
-        results = Parallel(n_jobs=-1)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
+        results = Parallel(n_jobs=15)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
         # results = [self.rollout(num_decisions) for i in range(num_evals)]
 
-        i=0
-        for r in results:
-            if i == 0:
-                b_all, cell_count_all, t_all, kn0_all, rewards_all, min_Q1, min_Q1_target, min_Q2, min_Q2_target = r
-                sum_reward = np.array([rewards_all.sum()])
-                if not np.all(cell_count_all > 0):
-                    ind = np.where(cell_count_all == 0)[0][0]
-                    extinct_times.append(t_all[ind])
-                    extinct_count +=1
-                    ind +=1
-                else:
-                    ind = b_all.size
-                # compute max cross correlation and lag
-                if np.std(b_all[:ind]) > 0:
-                    n_points = ind
-                    cross_corr = signal.correlate(b_all[:ind] - np.mean(b_all[:ind]), kn0_all[:ind] - np.mean(kn0_all[:ind]), mode='full')
-                    cross_corr /= (np.std(b_all[:ind]) * np.std(kn0_all[:ind]) * n_points)  # Normalize
-                    max_cross_corr.append(np.max(cross_corr))
-                    lags = signal.correlation_lags(b_all[:ind].size,kn0_all[:ind].size, mode="full")
-                    lag.append(lags[np.argmax(cross_corr)])
-                i+=1
-            else:
-                b, cell_count, t, kn0, rewards, Q1, Q1_target, Q2, Q2_target = r
-                b_all = np.concatenate((b_all, b), axis=1)
-                cell_count_all = np.concatenate((cell_count_all, cell_count), axis=1)
-                t_all = np.concatenate((t_all,t), axis=1)
-                kn0_all = np.concatenate((kn0_all,kn0), axis=1)
-                rewards_all = np.concatenate((rewards_all,rewards), axis=1)
-                sum_reward = np.concatenate((sum_reward, np.array([rewards.sum()])))
-                min_Q1 = np.vstack((min_Q1, Q1))
-                min_Q1_target = np.vstack((min_Q1_target, Q1_target))
-                min_Q2 = np.vstack((min_Q2, Q2))
-                min_Q2_target = np.vstack((min_Q2_target, Q2_target))
-                if not np.all(cell_count > 0):
-                    ind = np.where(cell_count == 0)[0][0]
-                    extinct_times.append(t[ind])
-                    extinct_count +=1
-                    ind +=1
-                else:
-                    ind = b.size
-                # compute max cross correlation and lag
-                if np.std(b_all[:ind]) > 0:
-                    n_points = ind
-                    cross_corr = signal.correlate(b[:ind] - np.mean(b[:ind]), kn0[:ind] - np.mean(kn0[:ind]), mode='full')
-                    cross_corr /= (np.std(b[:ind]) * np.std(kn0[:ind]) * n_points)  # Normalize
-                    max_cross_corr.append(np.max(cross_corr))
-                    lags = signal.correlation_lags(b[:ind].size,kn0[:ind].size, mode="full")
-                    lag.append(lags[np.argmax(cross_corr)])
+        b, cell_count, t, kn0, sum_rewards, min_Q1, min_Q1_target, min_Q2, min_Q2_target, U = list(zip(*results))
+        for drug, nutr, damage, time, count in zip(b,kn0,U,t,cell_count):
 
-        self.ave_sum_rewards.append(sum_reward.mean())
-        self.std_sum_rewards.append(sum_reward.std())
-        self.ave_Q1.append(min_Q1.mean())
-        self.ave_Q2.append(min_Q2.mean())
-        self.ave_Q1_target.append(min_Q1_target.mean())
-        self.ave_Q2_target.append(min_Q2_target.mean())
+            # compute max cross correlation and lag
+            if np.std(drug[self.delay_embed_len:]) > 0:
+                cross_correlation(drug[self.delay_embed_len:], nutr[self.delay_embed_len:], max_cross_corr_kn0, lag_kn0)
+                cross_correlation(drug[self.delay_embed_len:], damage[self.delay_embed_len:], max_cross_corr_U, lag_U)
+
+            # save extinction times
+            if count[-1] == 0:
+                    extinct_times.append(time[-1])
+                    extinct_count +=1
+
+        self.ave_sum_rewards.append(np.array(sum_rewards).mean())
+        self.std_sum_rewards.append(np.array(sum_rewards).std())
+        self.ave_Q1.append(np.array(min_Q1).mean())
+        self.ave_Q2.append(np.array(min_Q2).mean())
+        self.ave_Q1_target.append(np.array(min_Q1_target).mean())
+        self.ave_Q2_target.append(np.array(min_Q2_target).mean())
         self.grad_updates.append(self.model.grad_update_num)
+
         # save results
         ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.Inf
-        ave_max_cross_corr = sum(max_cross_corr)/len(max_cross_corr) if len(max_cross_corr) > 0 else 0
-        ave_corr_lag = sum(lag)/len(lag) if len(lag) > 0 else 0
-
+        ave_max_cross_corr_kn0 = sum(max_cross_corr_kn0)/len(max_cross_corr_kn0) if len(max_cross_corr_kn0) > 0 else 0
+        ave_corr_lag_kn0 = sum(lag_kn0)/len(lag_kn0) if len(lag_kn0) > 0 else 0
+        ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
+        ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
         # log via wandb
         wandb.log({"extinct_fraction": extinct_count/num_evals,
             "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr": ave_max_cross_corr,
-            "ave_corr_lag": ave_corr_lag,
-            "ave total reward": sum_reward.mean(),
-            "ave min Q1": min_Q1.mean()})
-        # select five trajectories randomly to plot
+            "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
+            "ave_corr_lag_kn0": ave_corr_lag_kn0,
+            "ave_max_cross_corr_U": ave_max_cross_corr_U,
+            "ave_corr_lag_U": ave_corr_lag_U,
+            "ave total reward": np.array(sum_rewards).mean(),
+            "ave min Q1": np.array(min_Q1).mean()})
+
+        # select trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
-        self.update_plot(episode, t_all[:,rand_i], cell_count_all[:,rand_i], kn0_all[:,rand_i], b_all[:,rand_i])
+        self.update_plot(episode, t, cell_count, kn0, b, rand_i)
 
 
     def rollout(self, num_decisions):
@@ -335,6 +303,7 @@ class CDQL:
         Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
         Q2_all = np.zeros((num_decisions+self.delay_embed_len,1))
         Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        Uave_all = np.zeros((num_decisions+self.delay_embed_len,1))
 
         # warmup
         b = self.init
@@ -351,6 +320,7 @@ class CDQL:
                 cell_count_all[k-36] = cell_count[-1]
                 t_all[k-36] = t[-1]
                 kn0_all[k-36] = self.sim_controller.k_n0
+                Uave_all[k-36] = self.sim_controller.U_ave
 
         for j in range(num_decisions):
             action_index, Q1_all[j+self.delay_embed_len,:], Q1_target_all[j+self.delay_embed_len,:], Q2_all[j+self.delay_embed_len,:], Q2_target_all[j+self.delay_embed_len,:] = self._get_action(state, eval=True)
@@ -363,10 +333,27 @@ class CDQL:
             cell_count_all[j+self.delay_embed_len] = cell_count[-1]
             t_all[j+self.delay_embed_len] = t[-1]
             kn0_all[j+self.delay_embed_len] = self.sim_controller.k_n0
+            Uave_all[j+self.delay_embed_len] = self.sim_controller.U_ave
             if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
+                # trim arrays to length of episode
+                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+self.delay_embed_len+1)
                 break
 
-        return b_all, cell_count_all, t_all, kn0_all, rewards_all, Q1_all, Q1_target_all, Q2_all, Q2_target_all
+        sum_rewards = np.array([rewards_all.sum()])
+        return b_all, cell_count_all, t_all, kn0_all, sum_rewards, Q1_all, Q1_target_all, Q2_all, Q2_target_all, Uave_all
+
+
+def trim(list, trim_ind):
+    return [vec[:trim_ind] for vec in list]
+
+def cross_correlation(sig1, sig2, max_cross_corr, lag):
+    n_points = sig1.size
+    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
+    cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
+    max_cross_corr.append(np.max(cross_corr))
+    lags = signal.correlation_lags(sig1.size,sig2.size, mode="full")
+    lag.append(lags[np.argmax(cross_corr)])
+
 
 if __name__ == "__main__":
     pass

@@ -249,15 +249,12 @@ class Cell_Population:
                 species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, kn0) # integrating one timestep
                 kn0 += self.dkn0dt(t[i-1], kn0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
                 kn0 = np.clip(kn0, 0.1, 5.0) # clipping values to keep in physiological range
-                if i == iterations-1:
-                    self.k_n0 = kn0
             else:
                 self.k_n0 = k_n0
                 species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, self.k_n0) # integrating one timestep
 
-            X_0 = 1 # amount of division proteins required to trigger division
-            # if cell has added threshold volume amount, it will then divide
-            birth_check = species_stack[4,:] >= X_0
+            # if cell has accumulated sufficient amount of division proteins, it will divide
+            birth_check = species_stack[4,:] >= 1
             if birth_check.sum() != 0:
                 r = np.random.normal(0.5, 0.04, birth_check.sum())
 
@@ -277,10 +274,10 @@ class Cell_Population:
 
             cell_count.append(species_stack.shape[1])
             if cell_count[-1] == 0:
-                self.k_n0 = kn0 # for better plot visualization
-                t = t[:i]
                 break
 
+        self.k_n0 = kn0
+        self.U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
         self.init_conditions = species_stack.copy()
         self.t_start = self.t_stop
         self.t_stop += self.delta_t
