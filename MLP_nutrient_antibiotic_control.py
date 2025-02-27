@@ -364,6 +364,7 @@ def cross_correlation(sig1, sig2, max_cross_corr, lag):
 
 if __name__ == "__main__":
     pass
+    # training_config = {"delay_embed_len": 20, "folder_name": "./Results"}
     # torch.manual_seed(0)
     # c = CDQL()
     # # c.load_data()
