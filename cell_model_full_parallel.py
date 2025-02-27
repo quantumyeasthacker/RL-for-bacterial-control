@@ -1,15 +1,14 @@
 import numpy as np
 from scipy import integrate, signal, optimize
 import random
-
+import copy
 
 class Cell_Population:
-    def __init__(self, num_cells_init, delta_t, omega, kn0_mean, T):
+    def __init__(self, num_cells_init, delta_t, omega, kn0_mean=None, T=None):
         self.init_conditions = []
         self.num_cells_init = num_cells_init
         self.delta_t = delta_t
         self.omega = omega
-        self.reward_shift = 10 # shift rewards to all be positive
 
         # parameters
         self.phiR_min = 0
@@ -23,9 +22,9 @@ class Cell_Population:
         self.alphaX = 4.5
         self.betaX = 1.1
         self.mu = 0.6
-        self.k_t0 = 2.7 # translational efficiency
+        self.kt0_mean = 2.7 # translational efficiency
         self.q = 2
-        self.phiS_max = 0.33
+        self.phiSm_mean = 0.33
         self.alpha = 1.54
         self.beta = 10.5
         self.K_u = 0.076
@@ -145,17 +144,39 @@ class Cell_Population:
                 self.f_R(x[0],x[2]) - x[1],
                 self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
 
-    def initialize(self, b):
-        # self.k_n0 = np.random.normal(loc=self.kn0_mean, scale=0.2*self.kn0_mean)
-        self.k_n0 = self.kn0_mean
-        self.phase = np.random.uniform(0,self.T)
+    def func_0(self, x, k_n0):
+        # function for calculating steady state conditions for given parameters, used if b=0 to reduce complexity
+        return [self.phiR_ss(x[0],0,k_n0) - x[1], # x[0]=a, x[1]=phi_R
+                self.f_R(x[0],0) - x[1]]
+
+    def initialize(self, b, k_n0=None, rand_param=False):
+        if k_n0 is None:
+            self.k_n0 = self.kn0_mean
+            self.phase = np.random.uniform(0,self.T)
+        else:
+            self.k_n0 = k_n0
+
+        if rand_param:
+            k_t0 = np.random.normal(loc=self.kt0_mean, scale=0.1*self.kt0_mean)
+            self.k_t0 = np.clip(k_t0, 1.5,4)
+            phiS_max = np.random.normal(loc=self.phiSm_mean, scale=0.1*self.phiSm_mean)
+            self.phiS_max = np.clip(phiS_max, 0.1,0.5)
+        else:
+            self.k_t0 = self.kt0_mean
+            self.phiS_max = self.phiSm_mean
 
         # solving for initial conditions to produce steady state
-        a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
-        phi_S0 = self.f_S(U0)
+        if b > 0:
+            a0,phi_R0,U0 = optimize.fsolve(self.func, [1e-4, 0.3, 1e-3], args=(self.k_n0,b)) # requires guess of initial conditions
+            phi_S0 = self.f_S(U0)
+        elif b == 0:
+            a0,phi_R0 = optimize.fsolve(self.func_0, [1e-4, 0.3], args=(self.k_n0))
+            U0 = 0.0
+            phi_S0 = 0.0
         ls = [a0,phi_R0,U0,phi_S0]
         if not all(val >= 0 for val in ls):
             print(ls)
+            print(self.k_t0, self.phiS_max)
             raise ValueError(f'Initial values are unphysical, change guess of initial conditions')
 
         # initializing each array to save initial conditions for each new trajectory
@@ -163,17 +184,13 @@ class Cell_Population:
         phiS_birth = np.ones((self.num_cells_init))*phi_S0
         a_birth = np.ones((self.num_cells_init))*a0
         U_birth = np.ones((self.num_cells_init))*U0
+
         # assigning random initial cell volume, in um^3
-        V_birth = np.zeros((self.num_cells_init))
-        X_birth = np.zeros((self.num_cells_init))
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
-        for i in range(self.num_cells_init):
-
-            start_t = random.randint(int(cycle_t),int(cycle_t*100))/100 # assigning random initial cell volume, in um^3
-            birth_size = 1 / self.f_X(a0, U0) # average cell size at birth at initial steady-state growth
-            V_birth[i] = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t)
-
-            X_birth[i] = self.f_X(a0,U0)*V_birth[i]*0.5
+        start_t = np.random.uniform(0,cycle_t, self.num_cells_init) # assigning random initial cell volume, in um^3
+        birth_size = 1 / self.f_X(a0, U0) # average cell size at birth at initial steady-state growth
+        V_birth = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t)
+        X_birth = self.f_X(a0,U0)*V_birth*0.5
 
         self.init_conditions = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         self.t_start = 0
@@ -186,7 +203,7 @@ class Cell_Population:
 
     # simulatation implementation
 
-    def simulate_population(self, true_num_cells, b, n_steps=3000, threshold=50):
+    def simulate_population(self, true_num_cells, b, k_n0=None, n_steps=3000, threshold=50):
 
         # unpacking initial conditions for each cell trajectory
         phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth = self.init_conditions.copy()
@@ -223,21 +240,20 @@ class Cell_Population:
         dt = (self.t_stop - self.t_start)/iterations
         cell_count = [num_cells]
 
-        # first simulate nutrient environment
-        k_n0 = np.zeros(iterations)
-        k_n0[0] = self.k_n0
-        for i in range(1,iterations):
-            k_n0[i] = k_n0[i-1] + self.dkn0dt(t[i-1], k_n0[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-        k_n0 = np.clip(k_n0, 0.1, 5.0) # clipping values to keep in physiological range
-        self.k_n0 = k_n0[-1]
-
         species_stack = np.array([phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth])
         for i in range(1, iterations):
-            species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0[i-1]) # integrating one timestep
 
-            X_0 = 1 # amount of division proteins required to trigger division
-            # if cell has added threshold volume amount, it will then divide
-            birth_check = species_stack[4,:] >= X_0
+            if k_n0 is None:
+                if i == 1:
+                    kn0 = self.k_n0
+                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, kn0) # integrating one timestep
+                kn0 += self.dkn0dt(t[i-1], kn0)*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
+                kn0 = np.clip(kn0, 0.1, 5.0) # clipping values to keep in physiological range
+            else:
+                species_stack = self.MultiIntegrate(species_stack, t[i], dt, b, k_n0) # integrating one timestep
+
+            # if cell has accumulated sufficient amount of division proteins, it will divide
+            birth_check = species_stack[4,:] >= 1
             if birth_check.sum() != 0:
                 r = np.random.normal(0.5, 0.04, birth_check.sum())
 
@@ -259,6 +275,8 @@ class Cell_Population:
             if cell_count[-1] == 0:
                 break
 
+        self.k_n0 = kn0 if k_n0 is None else k_n0
+        self.U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
         self.init_conditions = species_stack.copy()
         self.t_start = self.t_stop
         self.t_stop += self.delta_t
@@ -280,11 +298,13 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-
-        if p_final == 0:
-            growth_rate = 0
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
+            terminal = 0
+
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -296,7 +316,7 @@ class Cell_Population:
         state = state_gr + state_kn0 + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
-        return [state, cost]
+        return [state, cost, terminal]
 
     def get_reward_no_antibiotic(self, state, cell_count, b):
         # separating state vector
@@ -306,11 +326,13 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-
-        if p_final == 0:
-            growth_rate = 0
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
+            terminal = 0
+
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -320,7 +342,7 @@ class Cell_Population:
         state = state_gr + state_kn0
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
-        return [state, cost]
+        return [state, cost, terminal]
 
     def get_reward_no_nutrient(self, state, cell_count, b):
         # separating state vector
@@ -330,11 +352,13 @@ class Cell_Population:
 
         p_init = cell_count[0]
         p_final = cell_count[-1]
-
-        if p_final == 0:
-            growth_rate = 0
+        if p_final == 0: # handling extinction case
+            p_final = 1e-5
+            terminal = 1
         else:
-            growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t + self.reward_shift
+            terminal = 0
+
+        growth_rate = (np.log(p_final) - np.log(p_init)) / self.delta_t
         # dropping oldest values and replacing with newest ones
         state_gr.pop(0) 
         state_gr.append(growth_rate)
@@ -344,7 +368,7 @@ class Cell_Population:
         state = state_gr + state_act
         cost = growth_rate + self.omega*b**2 # adding nonlinear penalty for drug application
 
-        return [state, cost]
+        return [state, cost, terminal]
 
 if __name__ == '__main__':
     pass
