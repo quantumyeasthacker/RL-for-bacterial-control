@@ -1,2 +1,1 @@
-Work in progress developing deep reinforcement learning algorithms to study the interplay of time-varying nutrient and antibiotic
-protocols in resistance development and adaptation in bacteria
+Work in progress engineering deep reinforcement learning algorithms to study the interplay of time-varying nutrient and antibiotic protocols in resistance development and adaptation in bacteria. The different branches contain different implementations/variants of deep Q-learning. The main branch contains standard DQN with "framestacking", which is the simplest approach but has also proven to be the most successful to date.
