@@ -10,10 +10,7 @@ from joblib import Parallel, delayed
 from utils_figure_plot import DynamicUpdate, plot_reward_Q_loss
 import copy
 from scipy import signal
-import matplotlib as mpl
 import wandb
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
@@ -256,9 +253,9 @@ class CDQL:
         for drug, nutr, damage, time, count in zip(b,kn0,U,t,cell_count):
 
             # compute max cross correlation and lag
-            if np.std(drug[self.delay_embed_len:]) > 0:
-                cross_correlation(drug[self.delay_embed_len:], nutr[self.delay_embed_len:], max_cross_corr_kn0, lag_kn0)
-                cross_correlation(drug[self.delay_embed_len:], damage[self.delay_embed_len:], max_cross_corr_U, lag_U)
+            if np.std(drug) > 0:
+                cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
+                cross_correlation(drug, damage, max_cross_corr_U, lag_U)
 
             # save extinction times
             if count[-1] == 0:
@@ -295,16 +292,16 @@ class CDQL:
 
 
     def rollout(self, num_decisions):
-        b_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        cell_count_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        t_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        kn0_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        rewards_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q1_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q1_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q2_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Q2_target_all = np.zeros((num_decisions+self.delay_embed_len,1))
-        Uave_all = np.zeros((num_decisions+self.delay_embed_len,1))
+        b_all = np.zeros((num_decisions,1))
+        cell_count_all = np.zeros((num_decisions,1))
+        t_all = np.zeros((num_decisions,1))
+        kn0_all = np.zeros((num_decisions,1))
+        rewards_all = np.zeros((num_decisions,1))
+        Q1_all = np.zeros((num_decisions,1))
+        Q1_target_all = np.zeros((num_decisions,1))
+        Q2_all = np.zeros((num_decisions,1))
+        Q2_target_all = np.zeros((num_decisions,1))
+        Uave_all = np.zeros((num_decisions,1))
 
         # warmup
         b = self.init
@@ -314,30 +311,23 @@ class CDQL:
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
-                _, Q1_all[k-36], Q1_target_all[k-36], Q2_all[k-36], Q2_target_all[k-36] = self._get_action(state, eval=True) # just calling this to save Q value for plot
-                state, rewards_all[k-36], _ = self.get_state_reward(state, cell_count, b)
-
-                b_all[k-36] = b
-                cell_count_all[k-36] = cell_count[-1]
-                t_all[k-36] = t[-1]
-                kn0_all[k-36] = self.sim_controller.k_n0
-                Uave_all[k-36] = self.sim_controller.U_ave
+                state, _, _ = self.get_state_reward(state, cell_count, b)
 
         for j in range(num_decisions):
-            action_index, Q1_all[j+self.delay_embed_len,:], Q1_target_all[j+self.delay_embed_len,:], Q2_all[j+self.delay_embed_len,:], Q2_target_all[j+self.delay_embed_len,:] = self._get_action(state, eval=True)
+            action_index, Q1_all[j], Q1_target_all[j], Q2_all[j], Q2_target_all[j] = self._get_action(state, eval=True)
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j+self.delay_embed_len], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+            state, rewards_all[j], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
-            b_all[j+self.delay_embed_len] = action_b
-            cell_count_all[j+self.delay_embed_len] = cell_count[-1]
-            t_all[j+self.delay_embed_len] = t[-1]
-            kn0_all[j+self.delay_embed_len] = self.sim_controller.k_n0
-            Uave_all[j+self.delay_embed_len] = self.sim_controller.U_ave
+            b_all[j] = action_b
+            cell_count_all[j] = cell_count[-1]
+            t_all[j] = t[-1]
+            kn0_all[j] = self.sim_controller.k_n0
+            Uave_all[j] = self.sim_controller.U_ave
             if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
                 # trim arrays to length of episode
-                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+self.delay_embed_len+1)
+                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+1)
                 break
 
         sum_rewards = np.array([rewards_all.sum()])
@@ -358,8 +348,7 @@ def cross_correlation(sig1, sig2, max_cross_corr, lag):
 
 if __name__ == "__main__":
     pass
-    # training_config = {"delay_embed_len": 20, "folder_name": "./Results"}
-    # torch.manual_seed(0)
-    # c = CDQL()
+    # training_config = {"delay_embed_len": 20, "folder_name": "./Results", "T": 12}
+    # c = CDQL(training_config=training_config)
     # # c.load_data()
     # c.train()
