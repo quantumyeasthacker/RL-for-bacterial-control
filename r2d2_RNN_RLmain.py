@@ -108,15 +108,11 @@ class CDQL:
 
     def _get_action(self, state, hidden_state, episode=None, eval=False):
         """Gets action given some state
-        if episode is less than 5 returns a random action for each region
         Args:
             state: List defining the state
             hidden_state: List containing previous RNN hidden state
-            episode: episode number
-        """
-
-        """simplfy this code below
-        - check that gradients are not being stored (try with action out and detach)
+            episode: episode number, used for epsilon-greedy action selection
+            eval: if True, follows greedy action selection
         """
 
 
@@ -146,7 +142,7 @@ class CDQL:
         return (action, x['next_state'], store_minQ1, store_minQtarget1, store_minQ2, store_minQtarget2) if eval else (action, x['next_state'])
 
     def _update(self):
-        """Updates q1, q2, q1_target and q2_target networks based on clipped Double Q Learning Algorithm
+        """Updates q1, q2, q1_target and q2_target networks based on Double Q Learning Algorithm
         """
         if (len(self.buffer) < self.batch_size):
             return
@@ -281,7 +277,7 @@ class CDQL:
 
 
 
-    def eval(self, episode, num_decisions=250, num_evals=15): ###
+    def eval(self, episode, num_decisions=250, num_evals=10): ###
         """Given trained q networks, generate trajectories
         """
         print("Evaluation")
@@ -293,7 +289,7 @@ class CDQL:
         lag_kn0 = []
         lag_U = []
 
-        results = Parallel(n_jobs=15)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
+        results = Parallel(n_jobs=20)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
         # results = [self.rollout(num_decisions) for i in range(num_evals)]
 
         b, cell_count, t, kn0, sum_rewards, min_Q1, min_Q1_target, min_Q2, min_Q2_target, U = list(zip(*results))
