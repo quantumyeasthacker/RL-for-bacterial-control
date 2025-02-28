@@ -10,9 +10,9 @@ class ReplayBuffer:
         self.buffer = []
         self.position = int(0)
         self.transition = namedtuple("Transition", ("state", "action", \
-            "reward", "next_state", "hidden_state_init"))
+            "reward", "next_state", "hidden_state_init", "next_hidden_state_init", "terminal"))
 
-    def push(self, state, action, reward, next_state, hidden_state_init=None):
+    def push(self, state, action, reward, next_state, hidden_state_init, next_hidden_state_init, terminal):
         """Adds new tuple of (state, action, reward, next_state) sample to replay buffer
         If buffer is full (i.e. more than self. capacity) add new samples to beginning of
         replay buffer
@@ -21,9 +21,12 @@ class ReplayBuffer:
             action: current action
             reward: observed reward
             next_state: next state of system
+            hidden_state_init: initial hidden state of sequence
+            next_hidden_state_init: initial hidden state of next_state sequence
+            terminal: denotes if next state is terminal or not (1=terminal state, 0 otherwise)
         """
 
-        to_add = [state, action, reward, next_state, hidden_state_init]
+        to_add = [state, action, reward, next_state, hidden_state_init, next_hidden_state_init, terminal]
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
         self.buffer[self.position] = self.transition(*to_add)

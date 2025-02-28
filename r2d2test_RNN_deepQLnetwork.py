@@ -284,7 +284,7 @@ def parallel_wrapper(forward_fn: Callable) -> Callable:
             return d
 
         # NOTE(rjy): the initial input shape will be (T, B, N),
-        #            means encoder or head should process B trajectorys, each trajectory has T timestep,
+        #            means encoder or head should process B trajectories, each trajectory has T timestep,
         #            but T and B dimension can be both treated as batch_size in encoder and head,
         #            i.e., independent and parallel processing,
         #            so here we need such fn to reshape for encoder or head
