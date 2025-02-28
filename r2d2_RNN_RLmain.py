@@ -4,16 +4,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 from cell_model_full_parallel import Cell_Population
-from r2d2test_RNN_replaybuffer import ReplayBuffer
-from r2d2test_RNN_deepQLnetwork import Model
+from r2d2_RNN_replaybuffer import ReplayBuffer
+from r2d2_RNN_deepQLnetwork import Model
 from joblib import Parallel, delayed
 from utils_figure_plot_RNN import DynamicUpdate, plot_reward_Q_loss
 import copy
 from scipy import signal
-import matplotlib as mpl
 import wandb
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
 
 
 class CDQL:
@@ -28,6 +25,7 @@ class CDQL:
         agent_input="full",
         training_config={}):
 
+        rnn_type = training_config["rnn_type"]
         T = training_config["T"]
         self.max_seq_len = training_config["max_seq_len"]
         self.folder_name = training_config["folder_name"]
@@ -61,7 +59,7 @@ class CDQL:
         else:
             raise ValueError("Invalid agent_input value.")
 
-        self.model = Model(self.device, num_inputs=self.embed_multiplier, num_actions=self.num_actions)
+        self.model = Model(self.device, num_inputs=self.embed_multiplier, num_actions=self.num_actions, rnn_type=rnn_type)
 
         self.init = (0.0, [None]) # (b, hidden_state)
         self.max_pop = 1e11 # threshold for terminating episode
@@ -209,7 +207,7 @@ class CDQL:
         """
         # self.folder_name = "./Results" + str(sweep_var)
         # os.system("mkdir " + self.folder_name)
-        self.update_plot = DynamicUpdate(self.delta_t,self.folder_name)
+        self.update_plot = DynamicUpdate(self.folder_name)
 
         episodes = 350 ###
         e = np.arange(episodes)
@@ -341,16 +339,16 @@ class CDQL:
 
 
     def rollout(self, num_decisions):
-        b_all = np.zeros((num_decisions+1,1))
-        cell_count_all = np.zeros((num_decisions+1,1))
-        t_all = np.zeros((num_decisions+1,1))
-        kn0_all = np.zeros((num_decisions+1,1))
-        rewards_all = np.zeros((num_decisions+1,1))
-        Q1_all = np.zeros((num_decisions+1,1))
-        Q1_target_all = np.zeros((num_decisions+1,1))
-        Q2_all = np.zeros((num_decisions+1,1))
-        Q2_target_all = np.zeros((num_decisions+1,1))
-        Uave_all = np.zeros((num_decisions+1,1))
+        b_all = np.zeros((num_decisions,1))
+        cell_count_all = np.zeros((num_decisions,1))
+        t_all = np.zeros((num_decisions,1))
+        kn0_all = np.zeros((num_decisions,1))
+        rewards_all = np.zeros((num_decisions,1))
+        Q1_all = np.zeros((num_decisions,1))
+        Q1_target_all = np.zeros((num_decisions,1))
+        Q2_all = np.zeros((num_decisions,1))
+        Q2_target_all = np.zeros((num_decisions,1))
+        Uave_all = np.zeros((num_decisions,1))
 
         # warmup
         b, hidden_state = self.init
@@ -360,30 +358,24 @@ class CDQL:
         for k in range(1,36+1):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k == 36:
-                _, hidden_state, Q1_all[k-36], Q1_target_all[k-36], Q2_all[k-36], Q2_target_all[k-36] = self._get_action(state, hidden_state, eval=True) # calling to generate hidden state and to save Q value for plot
-                state, rewards_all[k-36], _ = self.get_state_reward(state, cell_count, b)
-
-                b_all[k-36] = b
-                cell_count_all[k-36] = cell_count[-1]
-                t_all[k-36] = t[-1]
-                kn0_all[k-36] = self.sim_controller.k_n0
-                Uave_all[k-36] = self.sim_controller.U_ave
+                _, hidden_state, _, _, _, _ = self._get_action(state, hidden_state, eval=True) # calling to generate hidden state
+                state, _, _ = self.get_state_reward(state, cell_count, b)
 
         for j in range(num_decisions):
-            action_index, hidden_state, Q1_all[j+1], Q1_target_all[j+1], Q2_all[j+1], Q2_target_all[j+1] = self._get_action(state, hidden_state, eval=True)
+            action_index, hidden_state, Q1_all[j], Q1_target_all[j], Q2_all[j], Q2_target_all[j] = self._get_action(state, hidden_state, eval=True)
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j+1], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+            state, rewards_all[j], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
-            b_all[j+1] = action_b
-            cell_count_all[j+1] = cell_count[-1]
-            t_all[j+1] = t[-1]
-            kn0_all[j+1] = self.sim_controller.k_n0
-            Uave_all[j+1] = self.sim_controller.U_ave
+            b_all[j] = action_b
+            cell_count_all[j] = cell_count[-1]
+            t_all[j] = t[-1]
+            kn0_all[j] = self.sim_controller.k_n0
+            Uave_all[j] = self.sim_controller.U_ave
             if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
                 # trim arrays to length of episode
-                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+1+1)
+                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+1)
                 break
 
         sum_rewards = np.array([rewards_all.sum()])

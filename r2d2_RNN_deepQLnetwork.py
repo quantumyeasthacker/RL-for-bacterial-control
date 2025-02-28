@@ -1,5 +1,5 @@
 from typing import Union, Optional, Dict, Callable, List, Tuple
-import treetensor.torch as ttorch
+# import treetensor.torch as ttorch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
@@ -9,7 +9,7 @@ import numpy as np
 
 
 class RNN(nn.Module):
-    def __init__(self, num_inputs, hidden_size, num_layers, rnn_type="GRU"):
+    def __init__(self, num_inputs, hidden_size, num_layers, rnn_type):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -63,7 +63,7 @@ class RNN(nn.Module):
                 if prev is None:
                     state.append([zeros, zeros])
                 else:
-                    if isinstance(prev, (Dict, ttorch.Tensor)):
+                    if isinstance(prev, Dict):
                         state.append([v for v in prev.values()])
                     else:
                         state.append(prev)
@@ -170,8 +170,9 @@ class DRQN(nn.Module):
             self,
             num_inputs: int,
             num_actions: int,
+            rnn_type: str,
             rnn_hidden_size: int = 64,
-            rnn_num_layers: int = 3
+            rnn_num_layers: int = 3,
             # head_layer_num: int = 1,
     ) -> None:
         """
@@ -191,7 +192,7 @@ class DRQN(nn.Module):
         super(DRQN, self).__init__()
         # For compatibility: 1, (1, ), [4, 32, 32]
         # obs_shape, action_shape = squeeze(obs_shape), squeeze(action_shape)
-        self.rnn = RNN(num_inputs, rnn_hidden_size, rnn_num_layers)
+        self.rnn = RNN(num_inputs, rnn_hidden_size, rnn_num_layers, rnn_type)
         self.head = Head(rnn_hidden_size, num_actions)
 
     def forward(self, inputs: Dict, inference: bool = False, saved_state_timesteps: Optional[list] = None) -> Dict:
@@ -316,13 +317,13 @@ def parallel_wrapper(forward_fn: Callable) -> Callable:
 
 
 class Model:
-    def __init__(self, device, num_inputs, num_actions):
+    def __init__(self, device, num_inputs, num_actions, rnn_type):
         self.device = device
-        self.q_1 = DRQN(num_inputs, num_actions).to(device)
-        self.q_target_1 = DRQN(num_inputs, num_actions).to(device)
+        self.q_1 = DRQN(num_inputs, num_actions, rnn_type).to(device)
+        self.q_target_1 = DRQN(num_inputs, num_actions, rnn_type).to(device)
 
-        self.q_2 = DRQN(num_inputs, num_actions).to(device)
-        self.q_target_2 = DRQN(num_inputs, num_actions).to(device)
+        self.q_2 = DRQN(num_inputs, num_actions, rnn_type).to(device)
+        self.q_target_2 = DRQN(num_inputs, num_actions, rnn_type).to(device)
 
         self.q_target_1.eval()
         self.q_target_2.eval()
