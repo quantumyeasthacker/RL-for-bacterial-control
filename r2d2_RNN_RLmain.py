@@ -296,9 +296,9 @@ class CDQL:
         for drug, nutr, damage, time, count in zip(b,kn0,U,t,cell_count):
 
             # compute max cross correlation and lag
-            if np.std(drug[1:]) > 0:
-                cross_correlation(drug[1:], nutr[1:], max_cross_corr_kn0, lag_kn0)
-                cross_correlation(drug[1:], damage[1:], max_cross_corr_U, lag_U)
+            if np.std(drug) > 0:
+                cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
+                cross_correlation(drug, damage, max_cross_corr_U, lag_U)
 
             # save extinction times
             if count[-1] == 0:
