@@ -153,7 +153,7 @@ class Cell_Population(object):
         X_birth = self.f_X(a0,U0) * V_birth * 0.5
 
         self._t = 0
-        self._log.append([self._t, k_n0, b, num_cells_init])
+        self._log.append([self._t, k_n0, b, num_cells_init, U0])
         self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth), axis=0)
 
     def _guess_init_values(self, k_n0, b):
@@ -203,7 +203,7 @@ class Cell_Population(object):
         U = U_i + self.dUdt(U_i, phiS_i, phiR_i, a_i, b)*dt + noise
         # check to make sure value is physical
         if b == 0:
-            U[:] = 0
+            U[...] = 0
         U[U < 0] = 0
         # if U < 0 or b == 0:
         #     U = 0
@@ -267,13 +267,13 @@ class Cell_Population(object):
 
             X_0 = 1 # amount of division proteins required to trigger division
             # if cell has added threshold volume amount, it will then divide
-            birth_check = species_stack[4,:] >= X_0
+            birth_check = species_stack[4] >= X_0
             if birth_check.sum() != 0:
                 r = np.random.normal(0.5, 0.04, birth_check.sum())
 
                 X_stack_children = species_stack[:,birth_check].copy()
-                X_stack_children[4,:] = 0
-                X_stack_children[5,:] = X_stack_children[5,:] * (1 - r)
+                X_stack_children[4] = 0
+                X_stack_children[5] = X_stack_children[5] * (1 - r)
 
                 species_stack[4,birth_check] = 0
                 species_stack[5,birth_check] = species_stack[5,birth_check] * r
@@ -281,7 +281,7 @@ class Cell_Population(object):
                 species_stack = np.concatenate((species_stack, X_stack_children), -1)
 
             # if cell has accumulated sufficient damage, it will die
-            death_check = species_stack[3,:] >= 1
+            death_check = species_stack[3] >= 1
             if death_check.sum() != 0:
                 species_stack = species_stack[:,~death_check]
 
@@ -299,8 +299,7 @@ class Cell_Population(object):
 
         self.populations = species_stack
         self._t = self._t + delta_t
-        
-        U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
+        U_ave = species_stack[3].mean() if species_stack[3].size > 0 else 1
         self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave])
         return self._t, (true_num_cells_prev, true_num_cells_next)
         # return self._t, self.true_num_cells
