@@ -299,7 +299,9 @@ class Cell_Population(object):
 
         self.populations = species_stack
         self._t = self._t + delta_t
-        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells])
+        
+        U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
+        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave])
         return self._t, (true_num_cells_prev, true_num_cells_next)
         # return self._t, self.true_num_cells
 

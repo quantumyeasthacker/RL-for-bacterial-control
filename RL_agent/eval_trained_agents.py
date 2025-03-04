@@ -17,9 +17,9 @@ if MAIN:
     
     ## ----- wandb setting ----- ##
     trial_name = "a%.2f_n%.2f_delay%d_rep%d"%(antibiotic_value, nutrient_value, delay_embed_len, rep)
-    folder_name = f"results/{trial_name}/"
+    folder_name = f"results_panelty/{trial_name}/"
     
-    eval_out = f"results_eval/{trial_name}/"
+    eval_out = f"results_eval_panelty/{trial_name}/"
     os.makedirs(eval_out, exist_ok=True)
 
     ## ----- RL setting ----- ##

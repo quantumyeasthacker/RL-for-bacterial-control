@@ -190,53 +190,57 @@ class CDQL(object):
         
         extinct_times = []
         extinct_count = 0
-        max_cross_corr = []
-        lag = []
+        max_cross_corr_kn0 = []
+        max_cross_corr_U = []
+        lag_kn0 = []
+        lag_U = []
+
 
         results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for i in range(num_evals))
         # results = [self.eval_step(num_decisions) for _ in range(num_evals)]
-        sum_reward = []
-        Q_values_stack = []
-        info_stack = []
-        for rewards, Q_values, terminated, _, info in results:
-            sum_reward.append(np.sum(rewards))
-            Q_values_stack.append(np.array(Q_values).min(-1).mean(0))
-            info_stack.append(info)
-            logger = info['log']
+        sum_rewards_all, min_Q_values_all, terminated_all, _, info_all = zip(*results)
+        ave_q1, ave_q2, ave_q1_target, ave_q2_target = np.mean(min_Q_values_all, axis=0)
+
+        for terminated, info in zip(terminated_all, info_all):
+            time, nutr, drug, _, damage = list(zip(*info['log']))[:5]
+
+            # compute max cross correlation and lag
+            if np.std(drug) > 0:
+                cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
+                cross_correlation(drug, damage, max_cross_corr_U, lag_U)
+
+            # save extinction times            
             if terminated:
-                extinct_times.append(logger[-1][0])
-                extinct_count += 1
-            
-            logger = np.array(logger)
-            k_n0_all = logger[:, 1]
-            b_all = logger[:, 2]
-            cross_corr = signal.correlate(b_all - np.mean(b_all), k_n0_all - np.mean(k_n0_all), mode='full')
-            cross_corr /= (np.std(b_all) * np.std(k_n0_all) * b_all.size)  # Normalize
-            max_cross_corr.append(np.max(cross_corr))
-            lags = signal.correlation_lags(b_all.size,k_n0_all.size, mode="full")
-            lag.append(lags[np.argmax(cross_corr)])
-        
-        self.ave_sum_rewards.append(np.mean(sum_reward))
-        self.std_sum_rewards.append(np.std(sum_reward))
-        Q_values_mean = np.mean(Q_values_stack, axis=0)
-        self.ave_Q1.append(Q_values_mean[0])
-        self.ave_Q2.append(Q_values_mean[1])
-        self.ave_Q1_target.append(Q_values_mean[2])
-        self.ave_Q2_target.append(Q_values_mean[3])
+                extinct_times.append(time[-1])
+                extinct_count += 1        
+
+        self.ave_sum_rewards.append(np.mean(sum_rewards_all))
+        self.std_sum_rewards.append(np.std(sum_rewards_all))
+        self.ave_Q1.append(ave_q1)
+        self.ave_Q2.append(ave_q2)
+        self.ave_Q1_target.append(ave_q1_target)
+        self.ave_Q2_target.append(ave_q2_target)
         self.grad_updates.append(self.training_iter)
 
-        ave_ext_time = np.mean(extinct_times) if extinct_count > 0 else np.Inf
-        ave_max_cross_corr = sum(max_cross_corr)/len(max_cross_corr) if len(max_cross_corr) > 0 else 0
-        ave_corr_lag = sum(lag)/len(lag) if len(lag) > 0 else 0
-
-        wandb.log({"extinct_fraction": extinct_count/num_evals,
+        # save results
+        ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.Inf
+        ave_max_cross_corr_kn0 = sum(max_cross_corr_kn0)/len(max_cross_corr_kn0) if len(max_cross_corr_kn0) > 0 else 0
+        ave_corr_lag_kn0 = sum(lag_kn0)/len(lag_kn0) if len(lag_kn0) > 0 else 0
+        ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
+        ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
+        # log via wandb
+        wandb.log({
+            "extinct_fraction": extinct_count/num_evals,
             "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr": ave_max_cross_corr,
-            "ave_corr_lag": ave_corr_lag,
-            "ave total reward": self.ave_sum_rewards[-1],
-            "ave min Q1": self.ave_Q1[-1]})
-        # select five trajectories randomly to plot
-        plot_trajectory(random.sample(info_stack, 5), episode, os.path.join(folder_name,"Eval"))
+            "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
+            "ave_corr_lag_kn0": ave_corr_lag_kn0,
+            "ave_max_cross_corr_U": ave_max_cross_corr_U,
+            "ave_corr_lag_U": ave_corr_lag_U,
+            "ave total reward": np.mean(sum_rewards_all),
+            "ave min Q1": ave_q1
+        })
+        
+        plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
         obs, _ = self.env.reset()
@@ -252,4 +256,14 @@ class CDQL(object):
             Q_values.append(Q_value)
             if terminated or truncated:
                 break
-        return rewards, Q_values, terminated, truncated, info
+        # return rewards, Q_values, terminated, truncated, info
+        return np.sum(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
+    
+
+def cross_correlation(sig1, sig2, max_cross_corr, lag):
+    n_points = sig1.size
+    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
+    cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
+    max_cross_corr.append(np.max(cross_corr))
+    lags = signal.correlation_lags(sig1.size,sig2.size, mode="full")
+    lag.append(lags[np.argmax(cross_corr)])
