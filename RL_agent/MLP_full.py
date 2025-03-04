@@ -6,7 +6,6 @@ import numpy as np
 from joblib import Parallel, delayed
 import copy
 from scipy import signal
-import matplotlib as mpl
 import wandb
 # import pickle
 
@@ -17,8 +16,6 @@ from deepQLnetwork import Model
 from utils_figure_plot import plot_trajectory, plot_reward_Q_loss
 
 
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
 EPS = 1e-10
 
 

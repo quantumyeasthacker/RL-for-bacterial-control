@@ -22,11 +22,7 @@ def plot_trajectory(info_list: Union[dict, list[dict]], episode: int, folder_nam
         delta_t = info['delta_t']
         warm_up = info['warm_up']
         delay_embed_len = info['delay_embed_len']
-        tkbc = np.array(info['log'])
-        t = tkbc[:,0]
-        k = tkbc[:,1]
-        b = tkbc[:,2]
-        c = tkbc[:,3]
+        t, k, b, c = list(zip(*info['log']))[:4]
 
         ax[0].plot(t, b)
         ax[1].plot(t, k)
