@@ -40,9 +40,9 @@ class CDQL:
         self.buffer = ReplayBuffer(1e6)
         self.batch_size = batch_size
 
-        self.b_actions = [0.0, 3]
+        self.b_actions = [0.0, 3.2]
         self.b_num_actions = len(self.b_actions)
-        self.kn0_actions = [1.0, 2.0, 3.0, 4.0]
+        self.kn0_actions = [1.0, 4.0]
         self.kn0_num_actions = len(self.kn0_actions)
         self.num_actions = self.b_num_actions*self.kn0_num_actions
         b, kn0 = np.meshgrid(range(self.b_num_actions), range(self.kn0_num_actions))
@@ -91,8 +91,8 @@ class CDQL:
         with open(filename,"w") as file:
             file.write(str(episode_num))
 
-    def load_data(self, sweep_var, folder_name="./Results"):
-        self.folder_name = folder_name + str(sweep_var)
+    def load_data(self, folder_name="./Results"):
+        self.folder_name = folder_name
         self.buffer.load_buffer(self.folder_name + "/replaybuffer.npy")
         self.model.load_networks(self.folder_name)
         self.episode_num = self.load_episode_num()

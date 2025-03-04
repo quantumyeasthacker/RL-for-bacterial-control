@@ -89,8 +89,8 @@ class CDQL:
         with open(filename,"w") as file:
             file.write(str(episode_num))
 
-    def load_data(self, sweep_var, folder_name="./Results"):
-        self.folder_name = folder_name + str(sweep_var)
+    def load_data(self, folder_name="./Results"):
+        self.folder_name = folder_name
         self.buffer.load_buffer(self.folder_name + "/replaybuffer.npy")
         self.model.load_networks(self.folder_name)
         self.episode_num = self.load_episode_num()
