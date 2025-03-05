@@ -2,6 +2,7 @@ import os
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from joblib import Parallel, delayed
 import copy
@@ -26,12 +27,24 @@ class CDQL(object):
         buffer_size: int = 1_000_000,
         batch_size: int = 512,
         gamma: float = 0.99,
+        # lambda_smooth: float = 0.1,
         update_freq: int = 2,
         train_freq: int = 1,
         gradient_steps: int = 1,
         use_gpu: bool = False,
     ) -> None:
-
+        '''
+        Args:
+            env: environment to train on
+            buffer_size: size of replay buffer
+            batch_size: batch size for training
+            gamma: reward discount factor
+            lambda_smooth: temporal regularization coefficient
+            update_freq: frequency of target q updates per q update
+            train_freq: frequency of training per step
+            gradient_steps: number of gradient steps to take each update
+            use_gpu: whether to use gpu
+        '''
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
         else:
@@ -50,9 +63,10 @@ class CDQL(object):
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
         self.gamma = gamma
-        self.update_freq = update_freq # frequency of target q updates per q update
-        self.train_freq = train_freq # frequency of training per step
-        self.gradient_steps = gradient_steps # number of gradient steps to take each update
+        # self.lambda_smooth = lambda_smooth 
+        self.update_freq = update_freq
+        self.train_freq = train_freq
+        self.gradient_steps = gradient_steps
 
         self.loss = []
         self.ave_sum_rewards = []
@@ -130,6 +144,21 @@ class CDQL(object):
             L_1 = nn.MSELoss()(Q_1, Q_expected)
             L_2 = nn.MSELoss()(Q_2, Q_expected)
 
+            # # Action smoothness regularization
+            # consecutive_q_1_values = self.model.q_1(state_batch)
+            # next_q_1_values = self.model.q_1(next_state_batch)
+            # action1_probs = F.softmax(consecutive_q_1_values, dim=-1)
+            # next_action1_probs = F.softmax(next_q_1_values, dim=-1)
+            # smoothness1_loss = nn.MSELoss()(action1_probs, next_action1_probs)
+            # L_1 += self.lambda_smooth * smoothness1_loss
+
+            # consecutive_q_2_values = self.model.q_2(state_batch)
+            # next_q_2_values = self.model.q_2(next_state_batch)
+            # action2_probs = F.softmax(consecutive_q_2_values, dim=-1)
+            # next_action2_probs = F.softmax(next_q_2_values, dim=-1)
+            # smoothness2_loss = nn.MSELoss()(action2_probs, next_action2_probs)
+            # L_2 += self.lambda_smooth * smoothness2_loss
+
             self.loss.append([L_1.item(), L_2.item()])
             self.model.q_optimizer_1.zero_grad()
             self.model.q_optimizer_2.zero_grad()
@@ -202,8 +231,9 @@ class CDQL(object):
             time, nutr, drug, _, damage = list(zip(*info['log']))[:5]
 
             # compute max cross correlation and lag
-            if np.std(drug) > 0:
+            if np.std(drug) > 0 and np.std(nutr) > 0:
                 cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
+            if np.std(drug) > 0 and np.std(damage) > 0:
                 cross_correlation(drug, damage, max_cross_corr_U, lag_U)
 
             # save extinction times            
@@ -258,9 +288,9 @@ class CDQL(object):
     
 
 def cross_correlation(sig1, sig2, max_cross_corr, lag):
-    n_points = sig1.size
+    n_points = len(sig1)
     cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
     cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
     max_cross_corr.append(np.max(cross_corr))
-    lags = signal.correlation_lags(sig1.size,sig2.size, mode="full")
+    lags = signal.correlation_lags(len(sig1),len(sig2), mode="full")
     lag.append(lags[np.argmax(cross_corr)])
