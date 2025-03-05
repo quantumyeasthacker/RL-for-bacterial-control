@@ -14,6 +14,11 @@ class Q(nn.Module):
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, num_actions)
 
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc4.weight, nonlinearity='relu')
+
     def forward(self, s):
         s = F.relu(self.fc1(s))
         s = F.relu(self.fc2(s))
@@ -82,6 +87,25 @@ class Model(object):
                 action = torch.argmin(self.q_1(curr_obs)).item()
             # self.q_1.train()
         return action
+
+    # def get_action_smooth_exploration(self, obs, deterministic: bool = True, noise_scale: float = 1):
+    #     """Returns action based on epsilon-greedy policy
+    #     Args:
+    #         obs: obs of system
+    #         epsilon: epsilon value
+    #     """
+    #     assert len(obs) == self.num_inputs
+    #     self.q_1.eval()
+    #     self.q_2.eval()
+        
+    #     with torch.no_grad():
+    #         curr_obs = torch.tensor(obs).float().to(self.device)
+    #         q_values = self.q_1(curr_obs)
+    #         if not deterministic:
+    #             noise = torch.randn_like(q_values) * noise_scale
+    #             q_values = q_values + noise
+    #             action = torch.argmin(q_values).item()
+    #     return action
 
     def _update(self, target, local):
         """Set the parametrs of target network to be that of local network

@@ -28,6 +28,7 @@ class CDQL(object):
         batch_size: int = 512,
         gamma: float = 0.99,
         # lambda_smooth: float = 0.1,
+        # noise_scale : float = 1.0,
         update_freq: int = 2,
         train_freq: int = 1,
         gradient_steps: int = 1,
@@ -39,7 +40,8 @@ class CDQL(object):
             buffer_size: size of replay buffer
             batch_size: batch size for training
             gamma: reward discount factor
-            lambda_smooth: temporal regularization coefficient
+            # lambda_smooth: temporal regularization coefficient
+            # noise_scale: noise parameters for smooth exploration
             update_freq: frequency of target q updates per q update
             train_freq: frequency of training per step
             gradient_steps: number of gradient steps to take each update
@@ -63,7 +65,8 @@ class CDQL(object):
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
         self.gamma = gamma
-        # self.lambda_smooth = lambda_smooth 
+        # self.lambda_smooth = lambda_smooth
+        # self.noise_scale = noise_scale
         self.update_freq = update_freq
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
