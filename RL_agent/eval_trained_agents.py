@@ -14,16 +14,17 @@ if MAIN:
     nutrient_value = float(sys.argv[2])
     delay_embed_len = int(sys.argv[3])
     rep = int(sys.argv[4])
+    results_dir = sys.argv[5]
     
     ## ----- wandb setting ----- ##
     trial_name = "a%.2f_n%.2f_delay%d_rep%d"%(antibiotic_value, nutrient_value, delay_embed_len, rep)
-    folder_name = f"results_panelty/{trial_name}/"
+    folder_name = f"{results_dir}/{trial_name}/"
     
-    eval_out = f"results_eval_panelty/{trial_name}/"
+    eval_out = f"{results_dir}_eval/{trial_name}/"
     os.makedirs(eval_out, exist_ok=True)
 
     ## ----- RL setting ----- ##
-    k_n0_observation = True
+    k_n0_observation = False
     b_observation = True
     use_gpu = False
     warm_up = 37
