@@ -14,10 +14,10 @@ class Q(nn.Module):
         self.fc3 = nn.Linear(64, 64)
         self.fc4 = nn.Linear(64, num_actions)
 
-        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.fc4.weight, nonlinearity='relu')
+        # nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        # nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+        # nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='relu')
+        # nn.init.kaiming_uniform_(self.fc4.weight, nonlinearity='relu')
 
     def forward(self, s):
         s = F.relu(self.fc1(s))
@@ -80,7 +80,6 @@ class Model(object):
         if not deterministic and np.random.rand() < epsilon:
             action = np.random.randint(self.num_actions)
         else:
-            
             with torch.no_grad():
                 curr_obs = torch.tensor(obs).float().to(self.device)
                 # action = torch.argmin(self.q_1(curr_obs), dim=-1) # for batch running purposes

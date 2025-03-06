@@ -29,8 +29,8 @@ if MAIN:
     rep = int(sys.argv[5])
 
     cell_config = CellConfig()
-    env_config = EnvConfig(k_n0_init = nutrient_value,
-                           warm_up = 27, delay_embed_len = 10,
+    env_config = EnvConfig(k_n0_constant = nutrient_value,
+                           warm_up = 37, delay_embed_len = 10,
                            b_actions = [0, antibiotic_value])
 
     env = ConstantNutrientEnv(env_config, cell_config)

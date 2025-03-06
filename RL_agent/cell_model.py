@@ -244,7 +244,7 @@ class Cell_Population(object):
 
         return num_cells
     
-    def simulate_population(self, k_n0, b, delta_t, n_steps=3000, threshold=50):
+    def simulate_population(self, k_n0_list, b, delta_t, n_steps=3000, threshold=50):
         if np.isnan(self.populations).any() or (self.populations < 0).any(): # checking to make sure nan values are not present
             # print('populations:', self.populations)
             raise ValueError(f'Simulation error, nan or negative values present')
@@ -256,11 +256,6 @@ class Cell_Population(object):
         dt = 1 / n_steps
         cell_count = [num_cells]
         
-        if isinstance(k_n0, float) or len(k_n0) == 1:
-            k_n0_list = np.ones(iterations) * k_n0
-        else:
-            k_n0_list = k_n0
-
         species_stack = self.populations
         for i in range(iterations):
             species_stack = self.MultiIntegrate(species_stack, dt, b, k_n0_list[i]) # integrating one timestep

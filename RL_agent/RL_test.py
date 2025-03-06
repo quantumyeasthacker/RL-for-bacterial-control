@@ -25,23 +25,23 @@ if MAIN:
                     "delay_embed_len": delay_embed_len,
                     "rep": rep}
     
-    wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
-    wandb.init(project="antibioticRL-zihang-constant-nutrient-test",
-               dir=folder_name,
-               name=str(trial_name),
-               config=wandb_config,
-               settings=wandb.Settings(symlink=False))
+#     wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
+#     wandb.init(project="antibioticRL-zihang-constant-nutrient-test",
+#                dir=folder_name,
+#                name=str(trial_name),
+#                config=wandb_config,
+#                settings=wandb.Settings(symlink=False))
     
     ## ----- RL setting ----- ##
     k_n0_observation = True
     b_observation = True
     use_gpu = False
-    warm_up = 37 - delay_embed_len
+    warm_up = 37
 
     cell_config = CellConfig()
     env_config = EnvConfig(k_n0_observation = k_n0_observation,
                            b_observation = b_observation,
-                           k_n0_init = nutrient_value,
+                           k_n0_constant = nutrient_value,
                            warm_up = warm_up, delay_embed_len = delay_embed_len,
                            b_actions = [0, antibiotic_value])
 
