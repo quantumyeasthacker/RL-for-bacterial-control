@@ -204,7 +204,7 @@ class CDQL:
             # warmup
             b = self.init
             state = [0]*self.delay_embed_len*self.embed_multiplier
-            self.sim_controller.initialize(b)
+            self.sim_controller.initialize(b, rand_param=True, rand_per=True)
             _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
             for k in range(1,36+self.delay_embed_len):
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
@@ -306,7 +306,7 @@ class CDQL:
         # warmup
         b = self.init
         state = [0]*self.delay_embed_len*self.embed_multiplier
-        self.sim_controller.initialize(b)
+        self.sim_controller.initialize(b, rand_param=True, rand_per=True)
         _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)

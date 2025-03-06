@@ -30,7 +30,7 @@ class Cell_Population:
         self.K_u = 0.076
 
         self.kn0_mean = kn0_mean
-        self.sigma_kn0 = 0
+        self.sigma_kn0 = 0.1
         self.T = T
 
 
@@ -149,7 +149,9 @@ class Cell_Population:
         return [self.phiR_ss(x[0],0,k_n0) - x[1], # x[0]=a, x[1]=phi_R
                 self.f_R(x[0],0) - x[1]]
 
-    def initialize(self, b, k_n0=None, rand_param=False):
+    def initialize(self, b, k_n0=None, rand_param=False, rand_per=False):
+        if rand_per:
+            self.T = np.random.uniform(6,18)
         if k_n0 is None:
             self.k_n0 = self.kn0_mean
             self.phase = np.random.uniform(0,self.T)
