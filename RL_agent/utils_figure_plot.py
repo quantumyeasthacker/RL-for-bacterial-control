@@ -21,7 +21,7 @@ def plot_trajectory(info_list: Union[dict, list[dict]], episode: int, folder_nam
     for info in info_list:
         delta_t = info['delta_t']
         warm_up = info['warm_up']
-        delay_embed_len = info['delay_embed_len']
+        # delay_embed_len = info['delay_embed_len']
         t, k, b, c = list(zip(*info['log']))[:4]
 
         ax[0].plot(t, b)
@@ -29,11 +29,11 @@ def plot_trajectory(info_list: Union[dict, list[dict]], episode: int, folder_nam
         ax[2].plot(t, c)
 
     ax[0].set_ylabel('antibiotic conc.')
-    ax[0].axvline(x=delta_t*(warm_up+delay_embed_len), linestyle='--', color='k')
+    ax[0].axvline(x=delta_t*(warm_up), linestyle='--', color='k')
     ax[1].set_ylabel('nutrient conc.')
-    ax[1].axvline(x=delta_t*(warm_up+delay_embed_len), linestyle='--', color='k')
+    ax[1].axvline(x=delta_t*(warm_up), linestyle='--', color='k')
     ax[2].set_ylabel('population size')
-    ax[2].axvline(x=delta_t*(warm_up+delay_embed_len), linestyle='--', color='k')
+    ax[2].axvline(x=delta_t*(warm_up), linestyle='--', color='k')
     ax[2].set_xlabel('Time (h)')
     ax[2].set_yscale('log')
     image_path = os.path.join(folder_name, f"{episode}.jpg")
