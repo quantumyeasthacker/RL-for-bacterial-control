@@ -25,7 +25,6 @@ class CDQL:
             agent_input="no_nutrient",
             training_config={}):
 
-        T = training_config["T"]
         self.delay_embed_len = training_config["delay_embed_len"]
         self.folder_name = training_config["folder_name"]
         os.makedirs(self.folder_name, exist_ok=True)
@@ -38,7 +37,7 @@ class CDQL:
         assert (not use_gpu) or (self.device == torch.device('cuda'))
 
         self.delta_t = delta_t
-        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean, T)
+        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean=kn0_mean)
         self.buffer = ReplayBuffer(1e6)
         self.batch_size = batch_size
         self.b_actions = [0.0, 3.72]
