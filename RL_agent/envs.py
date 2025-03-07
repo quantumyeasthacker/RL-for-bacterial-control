@@ -12,7 +12,7 @@ class EnvConfig:
     k_n0_init: float = 1.0
     b_init: float = 0.0
     n_steps: int = 3_000
-    delta_t: float = 0.15 # hours
+    delta_t: float = 0.2 # 0.15 # hours
     threshold: int = 50
     warm_up: int = None
     max_pop: int = int(1e11)

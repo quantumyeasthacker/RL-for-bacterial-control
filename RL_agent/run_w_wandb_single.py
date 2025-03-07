@@ -27,7 +27,7 @@ if MAIN:
                     "rep": rep}
     
     wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
-    wandb.init(project="antibioticRL-zihang-constant-nutrient-test",
+    wandb.init(project="antibioticRL-zihang-constant-nutrient-nutrient-2",
                dir=folder_name,
                name=str(trial_name),
                config=wandb_config,
@@ -61,7 +61,7 @@ if MAIN:
     
     ## ----- RL training ----- ##
     c.train(episodes=300,
-            num_decisions=200,
+            num_decisions=300,
             num_evals=5,
             folder_name=folder_name)
     
