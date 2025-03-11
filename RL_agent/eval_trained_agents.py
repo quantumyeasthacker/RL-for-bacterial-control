@@ -13,11 +13,12 @@ if MAIN:
     antibiotic_value = float(sys.argv[1])
     nutrient_value = float(sys.argv[2])
     delay_embed_len = int(sys.argv[3])
-    rep = int(sys.argv[4])
-    results_dir = sys.argv[5]
+    rep_run = int(sys.argv[4])
+    rep_eval = int(sys.argv[5])
+    results_dir = sys.argv[6]
     
     ## ----- wandb setting ----- ##
-    trial_name = "a%.2f_n%.2f_delay%d_rep%d"%(antibiotic_value, nutrient_value, delay_embed_len, rep)
+    trial_name = "a%.2f_n%.2f_delay%d_rep%d"%(antibiotic_value, nutrient_value, delay_embed_len, rep_run)
     folder_name = f"{results_dir}/{trial_name}/"
     
     eval_out = f"{results_dir}_eval/{trial_name}/"
@@ -43,10 +44,11 @@ if MAIN:
              use_gpu = use_gpu)
         
     ## ----- RL evaluating ----- ##
+    num_of_reps_eval = 10
     c.load_data(folder_name, False)
-    for i_eval in range(100):
-        _, _, _, _, info = c.eval_step(num_decisions=200)
-        fname="trial_%d"%int(i_eval)
+    for i_eval in range(num_of_reps_eval):
+        _, _, _, _, info = c.eval_step(num_decisions=300)
+        fname=f"trial_{rep_eval*num_of_reps_eval+i_eval}"
         with open(os.path.join(eval_out, str(fname)+'tcbk.pkl'), "wb") as f:
             pickle.dump(info, f)
     print("Done")
