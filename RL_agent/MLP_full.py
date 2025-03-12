@@ -86,7 +86,7 @@ class CDQL(object):
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
     
-    def _save_data(self, folder_name, replay_buffer = True):
+    def _save_data(self, folder_name, replay_buffer = False):
         self.model.save_networks(folder_name)
         if replay_buffer:
             np.save(os.path.join(folder_name, "replaybuffer.npy"), np.array(self.buffer.buffer, dtype=object))
@@ -95,7 +95,7 @@ class CDQL(object):
         # with open(os.path.join(folder_name, "episode_num.txt"), "w") as f:
         #     f.write(str(self.episode_num))
 
-    def load_data(self, folder_name, replay_buffer = True):
+    def load_data(self, folder_name, replay_buffer = False):
         self.model.load_networks(folder_name)
         if replay_buffer:
             self.buffer.load_buffer(os.path.join(folder_name, "replaybuffer.npy"))
