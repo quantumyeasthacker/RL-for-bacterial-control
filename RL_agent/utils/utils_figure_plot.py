@@ -2,7 +2,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from scipy import signal
 from typing import Any, ClassVar, Optional, TypeVar, Union
 import wandb
 

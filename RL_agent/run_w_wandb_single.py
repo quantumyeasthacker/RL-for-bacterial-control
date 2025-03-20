@@ -1,9 +1,10 @@
 import os
-from cell_model import CellConfig
-from envs import EnvConfig, ConstantNutrientEnv
-from MLP_full import CDQL
 import sys
 import wandb
+
+from envs.cell_model import CellConfig
+from envs.envs import EnvConfig, ConstantNutrientEnv
+from agent.MLP_full import CDQL
 
 
 MAIN = __name__ == "__main__"

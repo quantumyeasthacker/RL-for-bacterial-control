@@ -1,11 +1,12 @@
 import os
-import matplotlib.pyplot as plt
-import copy
+# import matplotlib.pyplot as plt
+# import copy
 import numpy as np
-from cell_model import CellConfig
-from envs import EnvConfig, ConstantNutrientEnv
 import sys
 import pickle
+
+from envs.cell_model import CellConfig
+from envs.envs import EnvConfig, ConstantNutrientEnv
 
 
 MAIN = __name__ == "__main__"

@@ -1,7 +1,6 @@
 import random
 import numpy as np
 from collections import namedtuple
-import time
 
 
 class ReplayBuffer:

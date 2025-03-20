@@ -10,11 +10,13 @@ from scipy import signal
 import wandb
 # import pickle
 
-from envs import ConstantNutrientEnv, VariableNutrientEnv, ControlNutrientEnv, BaseEnv, EnvConfig
-from replaybuffer import ReplayBuffer
-from cell_model import CellConfig
-from deepQLnetwork import Model
-from utils_figure_plot import plot_trajectory, plot_reward_Q_loss
+from agent.replaybuffer import ReplayBuffer
+from agent.deepQLnetwork import Model
+
+from envs.envs import ConstantNutrientEnv, VariableNutrientEnv, ControlNutrientEnv, BaseEnv, EnvConfig
+from envs.cell_model import CellConfig
+
+from utils.utils_figure_plot import plot_trajectory, plot_reward_Q_loss
 
 
 EPS = 1e-10

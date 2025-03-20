@@ -2,8 +2,9 @@ import numpy as np
 import copy
 import warnings
 from dataclasses import dataclass, field
-from cell_model import Cell_Population, CellConfig
 from typing import Dict, Mapping, Optional, Tuple, Any, Union
+
+from envs.cell_model import Cell_Population, CellConfig
 
 
 @dataclass

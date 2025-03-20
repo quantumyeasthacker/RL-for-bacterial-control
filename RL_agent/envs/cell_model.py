@@ -153,7 +153,7 @@ class Cell_Population(object):
         X_birth = self.f_X(a0,U0) * V_birth * 0.5
 
         self._t = 0
-        self._log.append([self._t, k_n0, b, num_cells_init, U0])
+        self._log.append([self._t, k_n0, b, num_cells_init, U0, phi_R0, phi_S0])
         self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth), axis=0)
 
     def _guess_init_values(self, k_n0, b):
@@ -295,7 +295,9 @@ class Cell_Population(object):
         self.populations = species_stack
         self._t = self._t + delta_t
         U_ave = species_stack[3].mean() if species_stack[3].size > 0 else 1
-        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave])
+        phi_R_ave = species_stack[0].mean() if species_stack[0].size > 0 else 0
+        phi_S_ave = species_stack[1].mean() if species_stack[1].size > 0 else 0
+        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave, phi_R_ave, phi_S_ave])
         return self._t, (true_num_cells_prev, true_num_cells_next)
         # return self._t, self.true_num_cells
 
