@@ -34,7 +34,10 @@ class EnvConfig:
     # variable nutrient environmental parameters
     T_k_n0: Optional[Union[float, None]] = None # 6
     k_n0_mean: Optional[Union[float, None]] = None # 2.55
-    sigma_kn0: Optional[Union[float, None]] = None #0
+    sigma_kn0: Optional[Union[float, None]] = None # 0.1
+
+    # fluctraing variable nutrient environmental parameters
+    T_k_n0_range: list[float] = field(default_factory=list)
 
     # control of nutrient environmental parameters
     k_n0_actions: Optional[list[float]] = field(default_factory=list)
@@ -184,7 +187,8 @@ class VariableNutrientEnv(BaseEnv):
         k_n0_list[0] = self.k_n0
         for i in range(1, self.iterations):
             k_n0_list[i] = k_n0_list[i-1] + self.dkn0dt(t[i-1], k_n0_list[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-        k_n0_list = np.clip(k_n0_list, 0.1, 5.1) # clipping values to keep in physiological range
+            k_n0_list[i] = np.clip(k_n0_list[i], 0.1, 5.0)
+        # k_n0_list = np.clip(k_n0_list, 0.1, 5.0) # clipping values to keep in physiological range
         self.k_n0 = k_n0_list[-1]
 
         return k_n0_list
@@ -192,7 +196,7 @@ class VariableNutrientEnv(BaseEnv):
     def reset(self) -> tuple:
         self._reset()
         self.k_n0 = self.k_n0_mean
-        self.phase = np.random.uniform(0,self.T)
+        self.phase = np.random.uniform(0, self.T_k_n0)
         for _ in range(self.warm_up):
             obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
         return obs, info
