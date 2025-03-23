@@ -26,20 +26,22 @@ if MAIN:
     half_period = int(sys.argv[1])
     initialize_app = sys.argv[2]
     antibiotic_value = float(sys.argv[3])
-    nutrient_value = float(sys.argv[4])
+    T_k_n0 = int(sys.argv[4])
     rep = int(sys.argv[5])
     results_dir = sys.argv[6]
 
     num_decisions = 300
 
     cell_config = CellConfig()
-    env_config = EnvConfig(k_n0_constant = nutrient_value,
-                           warm_up = 37, delay_embed_len = 10,
-                           b_actions = [0, antibiotic_value],
-                           max_pop = np.inf,
-                           T_k_n0 = 6,
-                           k_n0_mean = 2.55,
-                           sigma_kn0 = 0.1)
+    env_config = EnvConfig(
+        warm_up = 37, delay_embed_len = 30,
+        b_actions = [0, antibiotic_value],
+        max_pop = np.inf,
+        T_k_n0 = T_k_n0,
+        k_n0_mean = 2.55,
+        sigma_kn0 = 0.1
+    )
+                           
 
     # T_k_n0: Optional[Union[float, None]] = None # 6
     # k_n0_mean: Optional[Union[float, None]] = None # 2.55
@@ -47,7 +49,7 @@ if MAIN:
 
     env = VariableNutrientEnv(env_config, cell_config)
 
-    folder_name=f"{results_dir}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
+    folder_name=f"{results_dir}/a{antibiotic_value:.2f}_T{T_k_n0}_value_check/{initialize_app}_{half_period}/"
     os.makedirs(folder_name, exist_ok=True)
 
     if initialize_app == "low":
