@@ -32,12 +32,9 @@ class EnvConfig:
     k_n0_constant: Optional[Union[float, None]] = None
     
     # variable nutrient environmental parameters
-    T_k_n0: Optional[Union[float, None]] = None # 6
+    T_k_n0: Optional[Union[list[int], int, None]] = None # 6
     k_n0_mean: Optional[Union[float, None]] = None # 2.55
     sigma_kn0: Optional[Union[float, None]] = None # 0.1
-
-    # fluctraing variable nutrient environmental parameters
-    T_k_n0_range: list[float] = field(default_factory=list)
 
     # control of nutrient environmental parameters
     k_n0_actions: Optional[list[float]] = field(default_factory=list)
@@ -129,7 +126,8 @@ class BaseEnv(object):
             "log": self.sim_cells.logger,
             "delta_t": self.delta_t,
             "warm_up": self.warm_up,
-            "delay_embed_len": self.delay_embed_len
+            "delay_embed_len": self.delay_embed_len,
+            "T_k_n0_applied": self._T_k_n0
         }
 
 
@@ -175,7 +173,7 @@ class VariableNutrientEnv(BaseEnv):
         tau = 3
         Amp = 2
 
-        drift = Amp*np.sin(t*2*np.pi/self.T_k_n0 + self.phase) + self.k_n0_mean
+        drift = Amp*np.sin(t*2*np.pi/self._T_k_n0 + self.phase) + self.k_n0_mean
         dkdt = -(1/tau)*(k_n0 - drift)
         return dkdt
 
@@ -195,8 +193,17 @@ class VariableNutrientEnv(BaseEnv):
 
     def reset(self) -> tuple:
         self._reset()
+        if isinstance(self.T_k_n0, list):
+            if len(self.T_k_n0) == 1:
+                self._T_k_n0 = self.T_k_n0[0]
+            elif len(self.T_k_n0) == 2:
+                self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.T_k_n0[1])
+            else:
+                self._T_k_n0 = np.random.choice(self.T_k_n0)
+        else:
+            self._T_k_n0 = self.T_k_n0
         self.k_n0 = self.k_n0_mean
-        self.phase = np.random.uniform(0, self.T_k_n0)
+        self.phase = np.random.uniform(0, self._T_k_n0)
         for _ in range(self.warm_up):
             obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
         return obs, info
