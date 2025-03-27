@@ -68,7 +68,10 @@ class BaseEnv(object):
             warnings.warn("warm_up is less than delay_embed_len, setting warm_up to delay_embed_len.", category=UserWarning)
             self.warm_up = self.delay_embed_len
         self.sim_cells = Cell_Population(cell_config)
-        
+
+        self._k_n0_constant = None
+        self._T_k_n0 = None
+
     def reset(self):
         raise NotImplementedError
     
@@ -127,6 +130,7 @@ class BaseEnv(object):
             "delta_t": self.delta_t,
             "warm_up": self.warm_up,
             "delay_embed_len": self.delay_embed_len,
+            "k_n0_constant_applied": self._k_n0_constant,
             "T_k_n0_applied": self._T_k_n0
         }
 
@@ -137,20 +141,30 @@ class ConstantNutrientEnv(BaseEnv):
         assert len(self.b_actions) == self.num_actions, "Number of actions must match number of antibiotic values"
         assert env_config.k_n0_constant is not None, "k_n0_constant must be specified for constant nutrient environment"
         self.k_n0_constant = env_config.k_n0_constant
-
-        if self.k_n0_init != self.k_n0_constant:
-            warnings.warn("k_n0_init does not match k_n0_constant, changing k_n0_init to k_n0_constant.", category=UserWarning)
-            self.k_n0_init = self.k_n0_constant
     
     def reset(self) -> tuple:
+        if isinstance(self.k_n0_constant, list):
+            if len(self.k_n0_constant) == 1:
+                self._k_n0_constant = self.k_n0_constant[0]
+            elif len(self.k_n0_constant) == 2:
+                self._k_n0_constant = np.random.uniform(self.k_n0_constant[0], self.k_n0_constant[1])
+            else:
+                self._k_n0_constant = np.random.choice(self.k_n0_constant)
+        else:
+            self._k_n0_constant = self.k_n0_constant
+        
+        if self.k_n0_init != self._k_n0_constant:
+            warnings.warn("k_n0_init does not match k_n0_constant, changing k_n0_init to k_n0_constant.", category=UserWarning)
+            self.k_n0_init = self._k_n0_constant
+
         self._reset()
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(self.k_n0_constant, self.b_init)
+            obs, _, _, _, info = self._step(self._k_n0_constant, self.b_init)
         return obs, info
     
     def step(self, action) -> tuple:
         b = self.b_actions[action]
-        return self._step(self.k_n0_constant, b)
+        return self._step(self._k_n0_constant, b)
 
 
 class VariableNutrientEnv(BaseEnv):
