@@ -179,10 +179,6 @@ class VariableNutrientEnv(BaseEnv):
         self.k_n0_mean = env_config.k_n0_mean
         self.sigma_kn0 = env_config.sigma_kn0
 
-        if self.k_n0_init != self.k_n0_mean:
-            warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
-            self.k_n0_init = self.k_n0_mean
-
     def dkn0dt(self, t, k_n0):
         tau = 3
         Amp = 2
@@ -206,6 +202,10 @@ class VariableNutrientEnv(BaseEnv):
         return k_n0_list
 
     def reset(self) -> tuple:
+        if self.k_n0_init != self.k_n0_mean:
+            warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
+            self.k_n0_init = self.k_n0_mean
+            
         self._reset()
         if isinstance(self.T_k_n0, list):
             if len(self.T_k_n0) == 1:
