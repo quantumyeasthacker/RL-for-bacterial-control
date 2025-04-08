@@ -227,6 +227,31 @@ class VariableNutrientEnv(BaseEnv):
         return self._step(self.sim_k_n0(), b)
 
 
+class GeneralizedAgentEnv(BaseEnv):
+    def __init__(self, env_config, cell_config = CellConfig()):
+        super().__init__(env_config, cell_config)
+        self.env_type_1 = ConstantNutrientEnv(env_config, cell_config)
+        self.env_type_2 = VariableNutrientEnv(env_config, cell_config)
+
+        self.env_type_1.sim_cells = self.sim_cells
+        self.env_type_2.sim_cells = self.sim_cells
+
+        self.env = None
+    
+    def reset(self) -> tuple:
+        self._k_n0_constant = None
+        self._T_k_n0 = None
+
+        if np.random.rand() < 0.5:
+            self.env = self.env_type_1
+        else:
+            self.env = self.env_type_2
+        return self.env.reset()
+
+    def step(self, action) -> tuple:
+        return self.env.step(action)
+
+
 class ControlNutrientEnv(BaseEnv):
     def __init__(self, env_config, cell_config = CellConfig()):
         super().__init__(env_config, cell_config)
