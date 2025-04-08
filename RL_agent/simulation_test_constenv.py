@@ -30,7 +30,7 @@ if MAIN:
     rep = int(sys.argv[5])
     results_dir = sys.argv[6]
 
-    num_decisions = 300
+    num_decisions = 375
 
     cell_config = CellConfig()
     env_config = EnvConfig(k_n0_constant = nutrient_value,
