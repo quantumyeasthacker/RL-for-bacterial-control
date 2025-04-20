@@ -206,7 +206,6 @@ class VariableNutrientEnv(BaseEnv):
             warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
             self.k_n0_init = self.k_n0_mean
             
-        self._reset()
         if isinstance(self.T_k_n0, list):
             if len(self.T_k_n0) == 1:
                 self._T_k_n0 = self.T_k_n0[0]
@@ -216,8 +215,11 @@ class VariableNutrientEnv(BaseEnv):
                 self._T_k_n0 = np.random.choice(self.T_k_n0)
         else:
             self._T_k_n0 = self.T_k_n0
+        
         self.k_n0 = self.k_n0_mean
         self.phase = np.random.uniform(0, self._T_k_n0)
+        
+        self._reset()
         for _ in range(self.warm_up):
             obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
         return obs, info
