@@ -12,14 +12,18 @@ MAIN = __name__ == "__main__"
 if MAIN:
     ## ----- parameter loading ----- ##
     antibiotic_value = float(sys.argv[1])
-    constant_nutrient = [float(i_n) for i_n in sys.argv[2].split("_")]
-    T_k_n0 = [int(i_T) for i_T in sys.argv[3].split("_")]
+    constant_nutrient_string = sys.argv[2]
+    constant_nutrient = [float(i_n) for i_n in constant_nutrient_string.split("_")]
+    T_k_n0_string = sys.argv[3]
+    T_k_n0 = [int(i_T) for i_T in T_k_n0_string.split("_")]
     delay_embed_len = int(sys.argv[4])
     rep = int(sys.argv[5])
     results_dir = sys.argv[6]
+    episodes = int(sys.argv[7]) # 400
 
     ## ----- wandb setting ----- ##
-    trial_name = f"a{antibiotic_value:.2f}_const{constant_nutrient}_T{T_k_n0}_delay{delay_embed_len}_rep{rep}"
+    trained_env = f"const{constant_nutrient_string}_T{T_k_n0_string}"
+    trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep}"
     folder_name = f"{results_dir}/{trial_name}/"
     os.makedirs(folder_name, exist_ok=True)
 
@@ -27,6 +31,7 @@ if MAIN:
                     "constant_nutrient": constant_nutrient,
                     "T_k_n0": T_k_n0,
                     "delay_embed_len": delay_embed_len,
+                    "episodes": episodes,
                     "rep": rep}
     
     wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
@@ -66,7 +71,7 @@ if MAIN:
              use_gpu = use_gpu)
     
     ## ----- RL training ----- ##
-    c.train(episodes=400,
+    c.train(episodes=episodes,
             num_decisions=300,
             num_evals=5,
             folder_name=folder_name)

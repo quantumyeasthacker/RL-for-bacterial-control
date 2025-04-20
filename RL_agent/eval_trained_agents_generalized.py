@@ -19,15 +19,10 @@ if MAIN:
     rep_run = int(sys.argv[6])
     rep_eval = int(sys.argv[7])
     results_dir = sys.argv[8]
-
-    ## ----- trained agent env name ----- ##
-    const_part, t_part = trained_env[len("const"):].split("_T")
-    const_values = list(map(float, const_part.split("_")))
-    t_values = list(map(int, t_part.split("_")))
-    trained_env = f"const{const_values}_T{t_values}"
+    episodes = int(sys.argv[9])
 
     ## ----- wandb setting ----- ##
-    trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_rep{rep_run}"
+    trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep_run}"
     folder_name = f"{results_dir}/{trial_name}/"
     
     eval_out = f"{results_dir}_eval/{trial_name}_{eval_env}_{eval_variable}/"
