@@ -15,20 +15,23 @@ class DynamicUpdate():
         self.folder_name_test = self.folder_name + "/Eval"
         os.system("mkdir " + self.folder_name_test)
 
-    def __call__(self, episode, time, cell_count, kn0, b, rand_i):
-        figure, ax = plt.subplots(3,1)
+    def __call__(self, episode, time, cell_count, kn0, b, phi_R, phi_S, rand_i):
+        figure, ax = plt.subplots(4,1)
         figure.subplots_adjust(hspace=.0)
-        start_t = np.min(time[0])
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
 
-        for i in rand_i:
-            ax[0].plot(time[i]-start_t, b[i])
-            ax[1].plot(time[i]-start_t, kn0[i])
-            ax[2].plot(time[i]-start_t, cell_count[i])
+        for i,j in zip(rand_i,range(len(rand_i))):
+            ax[0].plot(time[i], b[i], color=colors[j])
+            ax[1].plot(time[i], kn0[i], color=colors[j])
+            ax[2].plot(time[i], phi_R[i], linestyle=':', color=colors[j])
+            ax[2].plot(time[i], phi_S[i], color=colors[j])
+            ax[3].plot(time[i], cell_count[i], color=colors[j])
         ax[0].set_ylabel('antibiotic conc.')
         ax[1].set_ylabel('nutrient conc.')
-        ax[2].set_ylabel('population size')
-        ax[2].set_xlabel('Time (h)')
-        ax[2].set_yscale('log')
+        ax[2].set_ylabel('proteome expression')
+        ax[3].set_ylabel('population size')
+        ax[3].set_xlabel('Time (h)')
+        ax[3].set_yscale('log')
         figure.savefig(self.folder_name_test+'/'+str(episode)+'.jpg', dpi=300, bbox_inches='tight')
         # wandb.log({"plot_trajectories": wandb.Image(self.folder_name_test+'/'+str(episode)+'.jpg')})
         plt.close()

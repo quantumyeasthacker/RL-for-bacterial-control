@@ -25,6 +25,7 @@ class CDQL:
             agent_input="no_nutrient",
             training_config={}):
 
+        T = training_config["T"]
         self.delay_embed_len = training_config["delay_embed_len"]
         self.folder_name = training_config["folder_name"]
         os.makedirs(self.folder_name, exist_ok=True)
@@ -37,7 +38,7 @@ class CDQL:
         assert (not use_gpu) or (self.device == torch.device('cuda'))
 
         self.delta_t = delta_t
-        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean=kn0_mean)
+        self.sim_controller = Cell_Population(num_cells_init, delta_t, omega, kn0_mean, T)
         self.buffer = ReplayBuffer(1e6)
         self.batch_size = batch_size
         self.b_actions = [0.0, 3.72]
@@ -203,14 +204,14 @@ class CDQL:
             # warmup
             b = self.init
             state = [0]*self.delay_embed_len*self.embed_multiplier
-            self.sim_controller.initialize(b, rand_param=True, rand_per=True)
+            self.sim_controller.initialize(b)
             _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
             for k in range(1,36+self.delay_embed_len):
                 _, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
                 if k >= 36:
                     state, _, _ = self.get_state_reward(state, cell_count, b)
 
-            for j in range(num_decisions):
+            for _ in range(num_decisions):
                 action_index = self._get_action(state, i)
                 transition_to_add = [copy.deepcopy(state), action_index]
 
@@ -244,22 +245,48 @@ class CDQL:
         max_cross_corr_U = []
         lag_kn0 = []
         lag_U = []
+        cross_corr_fixed_lag = []
+        cross_corr_fixed_lag_growth = []
 
         results = Parallel(n_jobs=15)(delayed(self.rollout)(num_decisions) for i in range(num_evals))
         # results = [self.rollout(num_decisions) for i in range(num_evals)]
 
-        b, cell_count, t, kn0, sum_rewards, min_Q1, min_Q1_target, min_Q2, min_Q2_target, U = list(zip(*results))
-        for drug, nutr, damage, time, count in zip(b,kn0,U,t,cell_count):
+        b, cell_count, t, kn0, sum_rewards, min_Q1, min_Q1_target, min_Q2, min_Q2_target, U, popgrowth, phi_R, phi_S = list(zip(*results))
+        for drug, nutr, damage, time, count, kappa in zip(b,kn0,U,t,cell_count,popgrowth):
 
             # compute max cross correlation and lag
-            if np.std(drug) > 0:
-                cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
-                cross_correlation(drug, damage, max_cross_corr_U, lag_U)
+            if np.std(drug[self.delay_embed_len:]) > 0:
+                cross_correlation(nutr, drug[self.delay_embed_len:], max_cross_corr_kn0, lag_kn0,
+                                  fixed_lag=True, cross_corr_fixed_lag=cross_corr_fixed_lag, max_lag=self.delay_embed_len)
+                cross_correlation(kappa, drug[self.delay_embed_len:], [], [],
+                                  fixed_lag=True, cross_corr_fixed_lag=cross_corr_fixed_lag_growth, max_lag=self.delay_embed_len)
+                cross_correlation(damage, drug[self.delay_embed_len:], max_cross_corr_U, lag_U)
 
             # save extinction times
             if count[-1] == 0:
                     extinct_times.append(time[-1])
                     extinct_count +=1
+
+        num_chunks = 2
+        if len(cross_corr_fixed_lag) > 0:
+            if len(cross_corr_fixed_lag) > 1:
+                stack = np.stack(cross_corr_fixed_lag, axis=-1)
+                cross_corr_fixed_lag = np.mean(stack, axis=-1)
+
+                stack = np.stack(cross_corr_fixed_lag_growth, axis=-1)
+                cross_corr_fixed_lag_growth = np.mean(stack, axis=-1)
+
+            chunks = np.array_split(cross_corr_fixed_lag, num_chunks)
+            chunk_mean_cross_corr = [np.mean(c) for c in chunks]
+
+            chunks_growth = np.array_split(cross_corr_fixed_lag_growth, num_chunks)
+            chunk_mean_cross_corr_growth = [np.mean(c) for c in chunks_growth]
+        else:
+            chunk_mean_cross_corr = [0.0]*num_chunks
+            chunk_mean_cross_corr_growth = [0.0]*num_chunks
+
+
+        # save results
 
         self.ave_sum_rewards.append(np.array(sum_rewards).mean())
         self.std_sum_rewards.append(np.array(sum_rewards).std())
@@ -269,12 +296,12 @@ class CDQL:
         self.ave_Q2_target.append(np.array(min_Q2_target).mean())
         self.grad_updates.append(self.model.grad_update_num)
 
-        # save results
         ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.Inf
         ave_max_cross_corr_kn0 = sum(max_cross_corr_kn0)/len(max_cross_corr_kn0) if len(max_cross_corr_kn0) > 0 else 0
         ave_corr_lag_kn0 = sum(lag_kn0)/len(lag_kn0) if len(lag_kn0) > 0 else 0
         ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
         ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
+
         # log via wandb
         wandb.log({"extinct_fraction": extinct_count/num_evals,
             "ave_ext_rate": 1/ave_ext_time,
@@ -282,67 +309,72 @@ class CDQL:
             "ave_corr_lag_kn0": ave_corr_lag_kn0,
             "ave_max_cross_corr_U": ave_max_cross_corr_U,
             "ave_corr_lag_U": ave_corr_lag_U,
-            "ave total reward": np.array(sum_rewards).mean(),
-            "ave min Q1": np.array(min_Q1).mean()})
+            "ave_total_reward": np.array(sum_rewards).mean(),
+            "ave_min_Q1": np.array(min_Q1).mean(),
+            "fixed_lag_cross_corr_short": chunk_mean_cross_corr[0],
+            "fixed_lag_cross_corr_long": chunk_mean_cross_corr[1],
+            "fixed_lag_cross_corr_short_growth": chunk_mean_cross_corr_growth[0],
+            "fixed_lag_cross_corr_long_growth": chunk_mean_cross_corr_growth[1]})
 
         # select trajectories randomly to plot
         rand_i = random.sample(range(num_evals), 5)
-        self.update_plot(episode, t, cell_count, kn0, b, rand_i)
+        self.update_plot(episode, t, cell_count, kn0, b, phi_R, phi_S, rand_i)
 
 
     def rollout(self, num_decisions):
-        b_all = np.zeros((num_decisions,1))
-        cell_count_all = np.zeros((num_decisions,1))
-        t_all = np.zeros((num_decisions,1))
-        kn0_all = np.zeros((num_decisions,1))
-        rewards_all = np.zeros((num_decisions,1))
-        Q1_all = np.zeros((num_decisions,1))
-        Q1_target_all = np.zeros((num_decisions,1))
-        Q2_all = np.zeros((num_decisions,1))
-        Q2_target_all = np.zeros((num_decisions,1))
-        Uave_all = np.zeros((num_decisions,1))
+        # b_all,cell_count_all,t_all,kn0_all,popgrowth_all,phiR_all,phiS_all
+        lists_time = [[] for _ in range(7)]
+        # rewards_all,Q1_all,Q1_target_all,Q2_all,Q2_target_all,Uave_all
+        lists_ep = [[] for _ in range(6)]
 
         # warmup
         b = self.init
         state = [0]*self.delay_embed_len*self.embed_multiplier
-        self.sim_controller.initialize(b, rand_param=True, rand_per=True)
+        self.sim_controller.initialize(b)
         _, cell_count = self.sim_controller.simulate_population(self.sim_controller.num_cells_init, b)
         for k in range(1,36+self.delay_embed_len):
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], b)
             if k >= 36:
                 state, _, _ = self.get_state_reward(state, cell_count, b)
 
-        for j in range(num_decisions):
-            action_index, Q1_all[j], Q1_target_all[j], Q2_all[j], Q2_target_all[j] = self._get_action(state, eval=True)
+                values = [b,cell_count[-1],t[-1],self.sim_controller.k_n0,self.sim_controller.pop_growth,self.sim_controller.phiR_ave,self.sim_controller.phiS_ave]
+                for lst, val in zip(lists_time, values):
+                    lst.append(val)
+
+        for _ in range(num_decisions):
+            action_index, Q1, Q1_target, Q2, Q2_target = self._get_action(state, eval=True)
             action_b = self.b_actions[self.b_index[action_index]]
 
             t, cell_count = self.sim_controller.simulate_population(cell_count[-1], action_b)
-            state, rewards_all[j], _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
+            state, reward, _ = self.get_state_reward(state, cell_count, action_b/max(self.b_actions))
 
-            b_all[j] = action_b
-            cell_count_all[j] = cell_count[-1]
-            t_all[j] = t[-1]
-            kn0_all[j] = self.sim_controller.k_n0
-            Uave_all[j] = self.sim_controller.U_ave
+            values = [action_b,cell_count[-1],t[-1],self.sim_controller.k_n0,self.sim_controller.pop_growth,self.sim_controller.phiR_ave,self.sim_controller.phiS_ave, reward,Q1,Q1_target,Q2,Q2_target,self.sim_controller.U_ave]
+            for lst, val in zip(lists_time+lists_ep, values):
+                lst.append(val)
+
             if cell_count[-1] == 0 or cell_count[-1] > self.max_pop:
-                # trim arrays to length of episode
-                b_all, cell_count_all, t_all, kn0_all, Uave_all = trim([b_all,cell_count_all,t_all,kn0_all,Uave_all], j+1)
                 break
 
-        sum_rewards = np.array([rewards_all.sum()])
-        return b_all, cell_count_all, t_all, kn0_all, sum_rewards, Q1_all, Q1_target_all, Q2_all, Q2_target_all, Uave_all
+        # unpack
+        b_all,cell_count_all,t_all,kn0_all,popgrowth_all,phiR_all,phiS_all = lists_time
+        rewards_all,Q1_all,Q1_target_all,Q2_all,Q2_target_all,Uave_all = lists_ep
+        return b_all, cell_count_all, t_all, kn0_all, sum(rewards_all), np.array(Q1_all).mean(), np.array(Q1_target_all).mean(), np.array(Q2_all).mean(), np.array(Q2_target_all).mean(), Uave_all, popgrowth_all, phiR_all, phiS_all
 
 
-def trim(list, trim_ind):
-    return [vec[:trim_ind] for vec in list]
-
-def cross_correlation(sig1, sig2, max_cross_corr, lag):
+def cross_correlation(sig1, sig2, max_cross_corr, lag, fixed_lag=False, cross_corr_fixed_lag=None, max_lag=None, mode="full"):
+    sig1 = np.array(sig1)
+    sig2 = np.array(sig2)
     n_points = sig1.size
-    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
+    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode=mode)
     cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
     max_cross_corr.append(np.max(cross_corr))
-    lags = signal.correlation_lags(sig1.size,sig2.size, mode="full")
+    lags = signal.correlation_lags(sig1.size,sig2.size, mode=mode)
     lag.append(lags[np.argmax(cross_corr)])
+
+    if fixed_lag:
+        # computing cross correlation for fixed lag
+        ind = np.where((lags >= 0) & (lags < max_lag))[0]
+        cross_corr_fixed_lag.append(cross_corr[ind])
 
 
 if __name__ == "__main__":

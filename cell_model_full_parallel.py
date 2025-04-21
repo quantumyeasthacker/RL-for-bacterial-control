@@ -1,7 +1,6 @@
 import numpy as np
-from scipy import integrate, signal, optimize
+from scipy import optimize
 import random
-import copy
 
 class Cell_Population:
     def __init__(self, num_cells_init, delta_t, omega, kn0_mean=None, T=None):
@@ -279,6 +278,8 @@ class Cell_Population:
 
         self.k_n0 = kn0 if k_n0 is None else k_n0
         self.U_ave = species_stack[3,:].mean() if species_stack[3,:].size > 0 else 1
+        self.phiR_ave = species_stack[0,:].mean() if species_stack[0,:].size > 0 else self.phiR_ave
+        self.phiS_ave = species_stack[1,:].mean() if species_stack[1,:].size > 0 else self.phiS_ave
         self.init_conditions = species_stack.copy()
         self.t_start = self.t_stop
         self.t_stop += self.delta_t
@@ -288,6 +289,10 @@ class Cell_Population:
         else:
             true_num_cells_next = cell_count[-1]
 
+        if true_num_cells_next == 0:
+            self.pop_growth = (np.log(1e-5) - np.log(true_num_cells)) / self.delta_t
+        else:
+            self.pop_growth = (np.log(true_num_cells_next) - np.log(true_num_cells)) / self.delta_t
         return t, [true_num_cells, true_num_cells_next]
 
 
