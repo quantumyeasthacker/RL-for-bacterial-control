@@ -48,7 +48,7 @@ if MAIN:
     num_of_reps_eval = 10
     c.load_data(folder_name, False)
     for i_eval in range(num_of_reps_eval):
-        _, _, _, _, info = c.eval_step(num_decisions=375)
+        _, _, _, _, info = c.eval_step(num_decisions=300)
         fname=f"trial_{rep_eval*num_of_reps_eval+i_eval}"
         with open(os.path.join(eval_out, str(fname)+'tcbk.pkl'), "wb") as f:
             pickle.dump(info, f)
