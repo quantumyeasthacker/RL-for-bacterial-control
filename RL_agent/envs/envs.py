@@ -178,13 +178,13 @@ class VariableNutrientEnv(BaseEnv):
         self.T_k_n0 = env_config.T_k_n0
         self.k_n0_mean = env_config.k_n0_mean
         self.sigma_kn0 = env_config.sigma_kn0
+        self.tau = 3
+        self.Amp = 2
 
     def dkn0dt(self, t, k_n0):
-        tau = 3
-        Amp = 2
 
-        drift = Amp*np.sin(t*2*np.pi/self._T_k_n0 + self.phase) + self.k_n0_mean
-        dkdt = -(1/tau)*(k_n0 - drift)
+        drift = self.Amp*np.sin(t*2*np.pi/self._T_k_n0 + self.phase) + self.k_n0_mean
+        dkdt = -(1/self.tau)*(k_n0 - drift)
         return dkdt
 
     def sim_k_n0(self):
@@ -202,9 +202,9 @@ class VariableNutrientEnv(BaseEnv):
         return k_n0_list
 
     def reset(self) -> tuple:
-        if self.k_n0_init != self.k_n0_mean:
-            warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
-            self.k_n0_init = self.k_n0_mean
+        # if self.k_n0_init != self.k_n0_mean:
+        #     warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
+        #     self.k_n0_init = self.k_n0_mean
             
         if isinstance(self.T_k_n0, list):
             if len(self.T_k_n0) == 1:
@@ -216,8 +216,9 @@ class VariableNutrientEnv(BaseEnv):
         else:
             self._T_k_n0 = self.T_k_n0
         
-        self.k_n0 = self.k_n0_mean
         self.phase = np.random.uniform(0, self._T_k_n0)
+        self.k_n0 = self.Amp*np.sin(self.phase) + self.k_n0_mean + np.random.normal(scale=0.5)
+        self.k_n0_init = self.k_n0
         
         self._reset()
         for _ in range(self.warm_up):
