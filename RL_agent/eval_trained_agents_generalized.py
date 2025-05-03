@@ -32,7 +32,6 @@ if MAIN:
     k_n0_observation = False
     b_observation = True
     use_gpu = False
-    warm_up = 37
 
     cell_config = CellConfig()
     if eval_env == "constenv":
@@ -40,7 +39,7 @@ if MAIN:
             k_n0_observation = k_n0_observation,
             b_observation = b_observation,
             k_n0_constant = float(eval_variable),
-            warm_up = warm_up, delay_embed_len = delay_embed_len,
+            delay_embed_len = delay_embed_len,
             b_actions = [0, antibiotic_value]
         )
         env = ConstantNutrientEnv(env_config, cell_config)

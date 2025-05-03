@@ -45,7 +45,6 @@ if MAIN:
     k_n0_observation = False
     b_observation = True
     use_gpu = False
-    warm_up = 37
 
     cell_config = CellConfig()
     env_config = EnvConfig(
@@ -55,7 +54,7 @@ if MAIN:
         k_n0_observation = k_n0_observation,
         b_observation = b_observation,
         k_n0_constant = constant_nutrient,
-        warm_up = warm_up, delay_embed_len = delay_embed_len,
+        delay_embed_len = delay_embed_len,
         b_actions = [0, antibiotic_value],
         T_k_n0 = T_k_n0,
         k_n0_mean = 2.55,

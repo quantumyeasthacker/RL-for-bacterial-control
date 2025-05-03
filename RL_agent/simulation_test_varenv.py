@@ -34,7 +34,7 @@ if MAIN:
 
     cell_config = CellConfig()
     env_config = EnvConfig(
-        warm_up = 37, delay_embed_len = 30,
+        delay_embed_len = 30,
         b_actions = [0, antibiotic_value],
         max_pop = np.inf,
         T_k_n0 = T_k_n0,
