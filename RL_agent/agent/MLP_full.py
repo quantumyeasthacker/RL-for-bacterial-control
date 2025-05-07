@@ -87,7 +87,7 @@ class CDQL(object):
 
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
-    
+
     def _save_data(self, folder_name, replay_buffer = False):
         os.makedirs(folder_name, exist_ok=True)
         self.model.save_networks(folder_name)
@@ -110,18 +110,12 @@ class CDQL(object):
         #     print(f"Partially trained model found, starting from episode {self.episode_num}.")
         # except:
         #     print("No partially trained model found, starting from episode 0.")
-    
+
     def _update(self) -> None:
         """Updates q1, q2, q1_target and q2_target networks based on clipped Double Q Learning Algorithm
         """
         if (len(self.buffer) < self.batch_size):
             return
-
-        # Make sure actor_target and critic_target are in eval mode
-        # assert self.model.q_1.training
-        # assert self.model.q_2.training
-        # assert not self.model.q_target_1.training
-        # assert not self.model.q_target_2.training
 
         self.model.q_1.train()
         self.model.q_2.train()
@@ -176,7 +170,7 @@ class CDQL(object):
             if (self.training_iter % self.update_freq) == 0:
                 self.model.update_target_nn()
         # self.model.grad_update_num +=1
-    
+
     def train(self, episodes: int, num_decisions: int, num_evals: int = 10, folder_name: str = "./") -> None:
         """Train the model
         Args:
@@ -208,7 +202,7 @@ class CDQL(object):
                 # self._save_data(folder_name)
                 self._save_data(os.path.join(folder_name, f"episode_{episode}"))
                 self.evalulate(episode, num_decisions, num_evals, folder_name)
-            
+
             if episode == episodes - 1:
                 plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, folder_name,
                                    self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target)
@@ -229,7 +223,7 @@ class CDQL(object):
         lag_U = []
 
 
-        results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for i in range(num_evals))
+        results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for _ in range(num_evals))
         # results = [self.eval_step(num_decisions) for _ in range(num_evals)]
         sum_rewards_all, min_Q_values_all, terminated_all, _, info_all = zip(*results)
         ave_q1, ave_q2, ave_q1_target, ave_q2_target = np.mean(min_Q_values_all, axis=0)
@@ -238,6 +232,7 @@ class CDQL(object):
             time, nutr, drug, _, damage = list(zip(*info['log']))[:5]
 
             # compute max cross correlation and lag
+            drug = drug[self.env.delay_embed_len:]
             if np.std(drug) > 0 and np.std(nutr) > 0:
                 cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
             if np.std(drug) > 0 and np.std(damage) > 0:
@@ -246,7 +241,7 @@ class CDQL(object):
             # save extinction times            
             if terminated:
                 extinct_times.append(time[-1])
-                extinct_count += 1        
+                extinct_count += 1
 
         self.ave_sum_rewards.append(np.mean(sum_rewards_all))
         self.std_sum_rewards.append(np.std(sum_rewards_all))
@@ -273,7 +268,6 @@ class CDQL(object):
             "ave total reward": np.mean(sum_rewards_all),
             "ave min Q1": ave_q1
         })
-        
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
@@ -292,7 +286,7 @@ class CDQL(object):
                 break
         # return rewards, Q_values, terminated, truncated, info
         return np.sum(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
-    
+
 
 def cross_correlation(sig1, sig2, max_cross_corr, lag):
     n_points = len(sig1)
