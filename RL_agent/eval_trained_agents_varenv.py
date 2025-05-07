@@ -17,10 +17,11 @@ if MAIN:
     rep_run = int(sys.argv[4])
     rep_eval = int(sys.argv[5])
     results_dir = sys.argv[6]
-    
+    training_episode = sys.argv[7]
+
     ## ----- wandb setting ----- ##
     trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_rep{rep_run}"
-    folder_name = f"{results_dir}/{trial_name}/"
+    folder_name = f"{results_dir}/{trial_name}/{training_episode}/"
     
     eval_out = f"{results_dir}_eval/{trial_name}/"
     os.makedirs(eval_out, exist_ok=True)
