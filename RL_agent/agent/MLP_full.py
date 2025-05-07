@@ -89,6 +89,7 @@ class CDQL(object):
         return torch.tensor(x).float().to(self.device)
     
     def _save_data(self, folder_name, replay_buffer = False):
+        os.makedirs(folder_name, exist_ok=True)
         self.model.save_networks(folder_name)
         if replay_buffer:
             np.save(os.path.join(folder_name, "replaybuffer.npy"), np.array(self.buffer.buffer, dtype=object))
@@ -204,7 +205,8 @@ class CDQL(object):
             print(f"Episode {episode} completed.")
             # if episode % 10 == 10 - 1:
             if (episode % 10 == 0) or (episode == episodes - 1):
-                self._save_data(folder_name)
+                # self._save_data(folder_name)
+                self._save_data(os.path.join(folder_name, f"episode_{episode}"))
                 self.evalulate(episode, num_decisions, num_evals, folder_name)
             
             if episode == episodes - 1:

@@ -47,7 +47,7 @@ if MAIN:
         env_config = EnvConfig(
             k_n0_observation = k_n0_observation,
             b_observation = b_observation,
-            warm_up = warm_up, delay_embed_len = delay_embed_len,
+            delay_embed_len = delay_embed_len,
             b_actions = [0, antibiotic_value],
             T_k_n0 = int(eval_variable),
             k_n0_mean = 2.55,

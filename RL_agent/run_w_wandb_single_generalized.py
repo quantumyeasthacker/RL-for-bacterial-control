@@ -35,7 +35,7 @@ if MAIN:
                     "rep": rep}
     
     wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
-    wandb.init(project="antibioticRL-generalized-agent",
+    wandb.init(project="antibioticRL-generalized-agent-delay-30-record",
                dir=folder_name,
                name=str(trial_name),
                config=wandb_config,
