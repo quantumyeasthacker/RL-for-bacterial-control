@@ -26,7 +26,7 @@ if MAIN:
     trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep_run}"
     folder_name = f"{results_dir}/{trial_name}/{training_episode}/"
     
-    eval_out = f"{results_dir}_eval/{trial_name}_{eval_env}_{eval_variable}/"
+    eval_out = f"{results_dir}_eval/{trial_name}_{eval_env}_{eval_variable}/{training_episode}/"
     os.makedirs(eval_out, exist_ok=True)
 
     ## ----- RL setting ----- ##
