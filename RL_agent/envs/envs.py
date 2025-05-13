@@ -152,10 +152,12 @@ class ConstantNutrientEnv(BaseEnv):
     def reset(self) -> tuple:
 
         if self.hold_out_range is not None:
+            assert is_range_inside(self.hold_out_range, self.k_n0_constant), "Hold out range must be within range of nutrient values"
+
             if np.random.rand() < (self.hold_out_range[0] - self.k_n0_constant[0]) / (self.k_n0_constant[1] - self.k_n0_constant[0] - self.hold_out_range[1] + self.hold_out_range[0]):
-                self._T_k_n0 = np.random.uniform(self.k_n0_constant[0], self.hold_out_range[0])
+                self._k_n0_constant = np.random.uniform(self.k_n0_constant[0], self.hold_out_range[0])
             else:
-                self._T_k_n0 = np.random.uniform(self.hold_out_range[1], self.k_n0_constant[1])
+                self._k_n0_constant = np.random.uniform(self.hold_out_range[1], self.k_n0_constant[1])
         else:
             if isinstance(self.k_n0_constant, list):
                 if len(self.k_n0_constant) == 1:
@@ -221,6 +223,8 @@ class VariableNutrientEnv(BaseEnv):
         #     warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
         #     self.k_n0_init = self.k_n0_mean
         if self.hold_out_range is not None:
+            assert is_range_inside(self.hold_out_range, self.T_k_n0), "Hold out range must be within range of time periods"
+
             if np.random.rand() < (self.hold_out_range[0] - self.T_k_n0[0]) / (self.T_k_n0[1] - self.T_k_n0[0] - self.hold_out_range[1] + self.hold_out_range[0]):
                 self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.hold_out_range[0])
             else:
@@ -327,3 +331,9 @@ class ControlNutrientEnv(BaseEnv):
 
     def step_hardcode(self, k_n0, b) -> tuple:
         return self._step(k_n0, b)
+
+
+def is_range_inside(list_a, list_b):
+    min_a, max_a = min(list_a), max(list_a)
+    min_b, max_b = min(list_b), max(list_b)
+    return min_a >= min_b and max_a <= max_b
