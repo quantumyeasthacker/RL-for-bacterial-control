@@ -30,11 +30,13 @@ class EnvConfig:
 
     # constant nutrient environmental parameters
     k_n0_constant: Optional[Union[float, None]] = None
+    hold_out_range_const: Optional[list] = None # list specifying interval of nutrient concentrations over which not be trained on, should fall within range of k_n0_constant
 
     # variable nutrient environmental parameters
     T_k_n0: Optional[Union[list[int], int, None]] = None # 6
     k_n0_mean: Optional[Union[float, None]] = None # 2.55
     sigma_kn0: Optional[Union[float, None]] = None # 0.1
+    hold_out_range_var: Optional[list] = None # list specifying interval of periods over which not be trained on, should fall within range of T_k_n0
 
     # control of nutrient environmental parameters
     k_n0_actions: Optional[list[float]] = field(default_factory=list)
@@ -145,17 +147,25 @@ class ConstantNutrientEnv(BaseEnv):
         assert len(self.b_actions) == self.num_actions, "Number of actions must match number of antibiotic values"
         assert env_config.k_n0_constant is not None, "k_n0_constant must be specified for constant nutrient environment"
         self.k_n0_constant = env_config.k_n0_constant
+        self.hold_out_range = env_config.hold_out_range_const
 
     def reset(self) -> tuple:
-        if isinstance(self.k_n0_constant, list):
-            if len(self.k_n0_constant) == 1:
-                self._k_n0_constant = self.k_n0_constant[0]
-            elif len(self.k_n0_constant) == 2:
-                self._k_n0_constant = np.random.uniform(self.k_n0_constant[0], self.k_n0_constant[1])
+
+        if self.hold_out_range is not None:
+            if np.random.rand() < (self.hold_out_range[0] - self.k_n0_constant[0]) / (self.k_n0_constant[1] - self.k_n0_constant[0] - self.hold_out_range[1] + self.hold_out_range[0]):
+                self._T_k_n0 = np.random.uniform(self.k_n0_constant[0], self.hold_out_range[0])
             else:
-                self._k_n0_constant = np.random.choice(self.k_n0_constant)
+                self._T_k_n0 = np.random.uniform(self.hold_out_range[1], self.k_n0_constant[1])
         else:
-            self._k_n0_constant = self.k_n0_constant
+            if isinstance(self.k_n0_constant, list):
+                if len(self.k_n0_constant) == 1:
+                    self._k_n0_constant = self.k_n0_constant[0]
+                elif len(self.k_n0_constant) == 2:
+                    self._k_n0_constant = np.random.uniform(self.k_n0_constant[0], self.k_n0_constant[1])
+                else:
+                    self._k_n0_constant = np.random.choice(self.k_n0_constant)
+            else:
+                self._k_n0_constant = self.k_n0_constant
 
         if self.k_n0_init != self._k_n0_constant:
             warnings.warn("k_n0_init does not match k_n0_constant, changing k_n0_init to k_n0_constant.", category=UserWarning)
@@ -184,6 +194,7 @@ class VariableNutrientEnv(BaseEnv):
         self.sigma_kn0 = env_config.sigma_kn0
         self.tau = 3
         self.Amp = 2
+        self.hold_out_range = env_config.hold_out_range_var
 
     def dkn0dt(self, t, k_n0):
 
@@ -209,16 +220,21 @@ class VariableNutrientEnv(BaseEnv):
         # if self.k_n0_init != self.k_n0_mean:
         #     warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
         #     self.k_n0_init = self.k_n0_mean
-
-        if isinstance(self.T_k_n0, list):
-            if len(self.T_k_n0) == 1:
-                self._T_k_n0 = self.T_k_n0[0]
-            elif len(self.T_k_n0) == 2:
-                self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.T_k_n0[1])
+        if self.hold_out_range is not None:
+            if np.random.rand() < (self.hold_out_range[0] - self.T_k_n0[0]) / (self.T_k_n0[1] - self.T_k_n0[0] - self.hold_out_range[1] + self.hold_out_range[0]):
+                self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.hold_out_range[0])
             else:
-                self._T_k_n0 = np.random.choice(self.T_k_n0)
+                self._T_k_n0 = np.random.uniform(self.hold_out_range[1], self.T_k_n0[1])
         else:
-            self._T_k_n0 = self.T_k_n0
+            if isinstance(self.T_k_n0, list):
+                if len(self.T_k_n0) == 1:
+                    self._T_k_n0 = self.T_k_n0[0]
+                elif len(self.T_k_n0) == 2:
+                    self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.T_k_n0[1])
+                else:
+                    self._T_k_n0 = np.random.choice(self.T_k_n0)
+            else:
+                self._T_k_n0 = self.T_k_n0
 
         self.phase = np.random.uniform(0, self._T_k_n0)
         self.k_n0 = self.Amp*np.sin(self.phase) + self.k_n0_mean + np.random.normal(scale=0.5)
@@ -242,6 +258,32 @@ class GeneralizedAgentEnv(BaseEnv):
 
         self.env_type_1.sim_cells = self.sim_cells
         self.env_type_2.sim_cells = self.sim_cells
+
+        self.env = None
+
+    def reset(self) -> tuple:
+        self._k_n0_constant = None
+        self._T_k_n0 = None
+
+        if np.random.rand() < 0.5:
+            self.env = self.env_type_1
+        else:
+            self.env = self.env_type_2
+        return self.env.reset()
+
+    def step(self, action) -> tuple:
+        return self.env.step(action)
+
+
+class GeneralizedAgentEnvHoldOut(BaseEnv):
+    def __init__(self, env_config, cell_config = CellConfig()):
+        super().__init__(env_config, cell_config)
+        self.env_type_1 = ConstantNutrientEnv(env_config, cell_config)
+        self.env_type_2 = VariableNutrientEnv(env_config, cell_config)
+
+        self.env_type_1.sim_cells = self.sim_cells
+        self.env_type_2.sim_cells = self.sim_cells
+        self.hold_out_range = env_config.hold_out_range
 
         self.env = None
 
