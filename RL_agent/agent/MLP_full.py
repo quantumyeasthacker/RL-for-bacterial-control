@@ -234,6 +234,11 @@ class CDQL(object):
             # compute max cross correlation and lag
             drug = drug[self.env.delay_embed_len:]
             damage = damage[self.env.delay_embed_len:]
+            
+            # drug = drug[(self.env.warm_up+1):]
+            # nutr = nutr[(self.env.warm_up+1):]
+            # damage = damage[(self.env.warm_up+1):]
+
             if np.std(drug) > 0 and np.std(nutr) > 0:
                 cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
             if np.std(drug) > 0 and np.std(damage) > 0:
