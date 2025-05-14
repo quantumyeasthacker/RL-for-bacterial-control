@@ -232,8 +232,9 @@ class CDQL(object):
             time, nutr, drug, _, damage = list(zip(*info['log']))[:5]
 
             # compute max cross correlation and lag
-            drug = drug[self.env.delay_embed_len:]
-            damage = damage[self.env.delay_embed_len:]
+            drug = drug[(self.env.warm_up+1):]
+            nutr = nutr[(self.env.warm_up-self.env.delay_embed_len+1):]
+            damage = damage[self.env.warm_up+1:]
             
             # drug = drug[(self.env.warm_up+1):]
             # nutr = nutr[(self.env.warm_up+1):]
