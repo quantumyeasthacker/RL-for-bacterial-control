@@ -45,6 +45,15 @@ def down_edge_detection(sequence, axis=-1):
         edge_idx[i] = sequence[i] < sequence[i - 1]
     return edge_idx
 
+
+def cross_correlation(sig1, sig2):
+    n_points = len(sig1)
+    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
+    cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
+    lags = signal.correlation_lags(len(sig1),len(sig2), mode="full")
+    return np.max(cross_corr), lags[np.argmax(cross_corr)]
+
+
 def load_logger_data_new(folder_name, max_length, max_pop, n_trials = 100, RS = True):
     tcbk_list = []
     cell_list = []
@@ -101,7 +110,7 @@ def plot_single(
         color_nut,
         n_trials = 100,
         more_antibiotic = False,
-        more_nutrient = False
+        more_nutrient = False,
 ):
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
     tcbk_list, t, b, k_n0, cell_array, (_, max_id) = load_logger_data_new(folder_name, sim_length, n_trials)
@@ -233,9 +242,87 @@ def plot_single_varenv(
     figure.savefig(out_name, dpi=300, bbox_inches='tight')
     plt.close(figure)
 
-def cross_correlation(sig1, sig2):
-    n_points = len(sig1)
-    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
-    cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
-    lags = signal.correlation_lags(len(sig1),len(sig2), mode="full")
-    return np.max(cross_corr), lags[np.argmax(cross_corr)]
+
+def plot_single_separate(
+        folder_name,
+        out_name,
+        sim_length,
+        color_nut,
+        n_trials = 100,
+        more_antibiotic = False,
+        more_nutrient = False,
+        warm_up_embed = 61,
+):
+    # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
+    tcbk_list, t, b, k_n0, cell_array, (_, max_id) = load_logger_data_new(folder_name, sim_length, n_trials)
+
+    out_path = os.path.dirname(out_name)
+    out_name_type = str(out_name).split(".")[-1]
+    out_name_base = str(out_name).split(f".{out_name_type}")[0]
+    os.makedirs(out_path, exist_ok=True)
+
+    figure, ax = plt.subplots(figsize=(8, 6))
+    # ax[0].set_title(f"antibiotic conc. max = {antibiotic_value}, nutrient conc. = {nutrient_value}")
+    if more_antibiotic:
+        for j in range(20):
+            ax.plot(tcbk_list[j][0], tcbk_list[j][2], color='gray', alpha=0.3, linewidth=1)
+    ax.plot(t,b, color=ANTIBIOTIC_COLOR)
+    # ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.set_ylabel('Antibiotic', fontdict={'fontsize': 16})
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    # ax.get_xaxis().set_ticks([])
+    figure.savefig(f"{out_name_base}_antibiotic.{out_name_type}", dpi=300, bbox_inches='tight')
+    plt.close(figure)
+
+    figure, ax = plt.subplots(figsize=(8, 6))
+    if more_nutrient:
+        for j in range(20):
+            ax.plot(tcbk_list[j][0], tcbk_list[j][3], color='gray', alpha=0.3, linewidth=1)
+    ax.plot(t, k_n0, color=color_nut)
+    # ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.set_ylabel('Nutrient', fontdict={'fontsize': 16})
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    # ax.get_xaxis().set_ticks([])
+    figure.savefig(f"{out_name_base}_nutrient.{out_name_type}", dpi=300, bbox_inches='tight')
+    plt.close(figure)
+
+    figure, ax = plt.subplots(figsize=(8, 6))
+    for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
+        ax.plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color='gray', alpha=0.3, linewidth=1)
+    ax.plot(t, tcbk_list[max_id][4], color="black")
+    # ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.set_ylabel(r'$\phi_R$', fontdict={'fontsize': 16})
+    ax.set_ylim(bottom=-0.1, top=0.45)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    # ax.get_xaxis().set_ticks([])
+    figure.savefig(f"{out_name_base}_phiR.{out_name_type}", dpi=300, bbox_inches='tight')
+    plt.close(figure)
+
+    figure, ax = plt.subplots(figsize=(8, 6))
+    for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
+        ax.plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color='gray', alpha=0.3, linewidth=1)
+    ax.plot(t, tcbk_list[max_id][5], color="black")
+    # ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.set_ylabel(r'$\phi_S$', fontdict={'fontsize': 16})
+    ax.set_ylim(bottom=-0.1, top=0.35)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    # ax.get_xaxis().set_ticks([])
+    figure.savefig(f"{out_name_base}_phiS.{out_name_type}", dpi=300, bbox_inches='tight')
+    plt.close(figure)
+
+    figure, ax = plt.subplots(figsize=(8, 6))
+    for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
+        ax.plot(tcbk_list[j][0], tcbk_list[j][1], color='gray', alpha=0.3, linewidth=1)
+    ax.plot(t, tcbk_list[max_id][1], color=POP_SIZE_COLOR)
+    ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.set_ylabel(r'$P$', fontdict={'fontsize': 16})
+    ax.set_xlabel('Time (h)', fontdict={'fontsize': 16})
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    ax.set_yscale('log')
+    figure.savefig(f"{out_name_base}_pop.{out_name_type}", dpi=300, bbox_inches='tight')
+    plt.close(figure)

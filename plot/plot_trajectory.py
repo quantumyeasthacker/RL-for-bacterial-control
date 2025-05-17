@@ -10,7 +10,7 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import host_subplot
 from mpl_toolkits import axisartist
 
-from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, plot_single, plot_single_varenv
+from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, plot_single, plot_single_varenv, plot_single_separate
 from pathlib import Path
 
 
@@ -56,11 +56,14 @@ for param in param_sim:
     #     continue
     if nutrient_value != "2.00":
         continue
+    if initialize_app != "constant":
+        continue
+
     folder_name = sim_folder / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}/"
 
-    out_name = BASE_PATH / "figures_pdf" / "constant_nutrient" / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
+    out_name = BASE_PATH / "figures_pdf" / "constant_nutrient_separate" / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
 
-    plot_single(folder_name, out_name, sim_length, color_map[nutrient_value], n_trials)
+    plot_single_separate(folder_name, out_name, sim_length, color_map[nutrient_value], n_trials, warm_up_embed = warm_up_embed)
 
 # %% ----- ----- ----- ----- constant eval ----- ----- ----- ----- %% #
 env_type = "constenv"
@@ -85,7 +88,7 @@ for param in param_agent:
 
     folder_name = eval_folder / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
 
-    out_name = BASE_PATH / "figures_pdf" / "constant_nutrient" / "eval" / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    out_name = BASE_PATH / "figures_jpg" / "constant_nutrient" / "eval" / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
 
     plot_single(folder_name, out_name, sim_length, color_map[nutrient_value], n_trials_eval, True)
 
@@ -103,17 +106,21 @@ with open(param_file, "r") as f:
 
 param_sim = [x.strip() for x in param_sim]
 param_sim = [x.split(" ") for x in param_sim]
-param_sim = [x for x in param_sim if x[1] == "constant"]
 
 for param in param_sim:
     # half_period = int(param[0])
     initialize_app = param[1]
     antibiotic_value = float(param[2])
+    if param[3] != "12":
+        continue
+    if initialize_app != "constant":
+        continue
+
     folder_name = sim_folder / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}/"
 
-    out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
+    out_name = BASE_PATH / "figures_pdf" / "var_nutrient_separate" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
 
-    plot_single(folder_name, out_name, sim_length, colors_baby_blue[0], n_trials, False, True)
+    plot_single_separate(folder_name, out_name, sim_length, colors_baby_blue[0], n_trials, False, True, warm_up_embed = warm_up_embed)
 
 # %% ----- ----- ----- ----- varenv eval ----- ----- ----- ----- %% #
 colors_baby_blue = ["#89CFF0", "#60BEEB", "#38AEE6", "#1B99D4", "#167CAC", "#115E83", "#0B415A"]
@@ -139,7 +146,7 @@ for param in param_agent:
     
     folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
 
-    out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
 
     plot_single_varenv(folder_name, out_name, sim_length, colors_baby_blue, n_trials_eval)
 
