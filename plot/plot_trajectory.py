@@ -32,9 +32,8 @@ num_decisions = 300
 sim_length = num_decisions + warm_up_embed
 max_pop: int = int(1e11)
 
-color_map = {"1.00": "#dec60c", "2.00": "#a7c82f", "3.00": "#548c6a"}
-
 # %% ----- ----- ----- ----- constant sim ----- ----- ----- ----- %% #
+color_map = {"1.00": "#dec60c", "2.00": "#a7c82f", "3.00": "#548c6a"}
 env_type = "constenv"
 param_file = BASE_PATH / "param_space" / f"param_non_monotonic_pulsing_{env_type}.txt"
 sim_folder = BASE_PATH / f"results_sim_{env_type}"
@@ -60,12 +59,17 @@ for param in param_sim:
         continue
 
     folder_name = sim_folder / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}/"
+    loaded_logger = load_logger_data_new(folder_name, sim_length, n_trials)
+
+    out_name = BASE_PATH / "figures_jpg" / "constant_nutrient_separate" / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}.jpg"
+    plot_single_separate(loaded_logger, out_name, color_map[nutrient_value], warm_up_embed = warm_up_embed)
 
     out_name = BASE_PATH / "figures_pdf" / "constant_nutrient_separate" / f"a{param[2]}_n{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
+    plot_single_separate(loaded_logger, out_name, color_map[nutrient_value], warm_up_embed = warm_up_embed)
 
-    plot_single_separate(folder_name, out_name, sim_length, color_map[nutrient_value], n_trials, warm_up_embed = warm_up_embed)
 
 # %% ----- ----- ----- ----- constant eval ----- ----- ----- ----- %% #
+color_map = {"1.00": "#dec60c", "2.00": "#a7c82f", "3.00": "#548c6a"}
 env_type = "constenv"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval.txt"
 eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
@@ -87,10 +91,13 @@ for param in param_agent:
         continue
 
     folder_name = eval_folder / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
+    loaded_logger = load_logger_data_new(folder_name, sim_length, n_trials_eval)
 
     out_name = BASE_PATH / "figures_jpg" / "constant_nutrient" / "eval" / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
+    plot_single(loaded_logger, out_name, color_map[nutrient_value], True)
 
-    plot_single(folder_name, out_name, sim_length, color_map[nutrient_value], n_trials_eval, True)
+    out_name = BASE_PATH / "figures_pdf" / "constant_nutrient" / "eval" / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    plot_single(loaded_logger, out_name, color_map[nutrient_value], True)
 
 # %% ----- ----- ----- ----- varenv sim (constant) ----- ----- ----- ----- %% #
 colors_baby_blue = ["#89CFF0", "#60BEEB", "#38AEE6", "#1B99D4", "#167CAC", "#115E83", "#0B415A"]
@@ -117,10 +124,13 @@ for param in param_sim:
         continue
 
     folder_name = sim_folder / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}/"
+    loaded_logger = load_logger_data_new(folder_name, sim_length, n_trials)
+
+    out_name = BASE_PATH / "figures_jpg" / "var_nutrient_separate" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.jpg"
+    plot_single_separate(loaded_logger, out_name, colors_baby_blue[0], False, True, warm_up_embed = warm_up_embed)
 
     out_name = BASE_PATH / "figures_pdf" / "var_nutrient_separate" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
-
-    plot_single_separate(folder_name, out_name, sim_length, colors_baby_blue[0], n_trials, False, True, warm_up_embed = warm_up_embed)
+    plot_single_separate(loaded_logger, out_name, colors_baby_blue[0], False, True, warm_up_embed = warm_up_embed)
 
 # %% ----- ----- ----- ----- varenv eval ----- ----- ----- ----- %% #
 colors_baby_blue = ["#89CFF0", "#60BEEB", "#38AEE6", "#1B99D4", "#167CAC", "#115E83", "#0B415A"]
@@ -145,9 +155,11 @@ for param in param_agent:
         continue
     
     folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
+    loaded_logger = load_logger_data_new(folder_name, sim_length, n_trials_eval)
 
     out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
+    plot_single_varenv(loaded_logger, out_name, colors_baby_blue, n_trials_eval)
 
-    plot_single_varenv(folder_name, out_name, sim_length, colors_baby_blue, n_trials_eval)
-
+    out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    plot_single_varenv(loaded_logger, out_name, colors_baby_blue, n_trials_eval)
 # %%
