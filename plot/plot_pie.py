@@ -35,6 +35,32 @@ sim_length = num_decisions + warm_up_embed
 max_pop: int = int(1e11)
 
 # %%
+def detect_low_high_periods(signal, low_value=0.0, high_value=3.72):
+    periods = []
+    i = 0
+    n = len(signal)
+
+    while i < n:
+        # Detect low_value run
+        if signal[i] == low_value:
+            start = i
+            while i < n and signal[i] == low_value:
+                i += 1
+            # Transition to high_value run
+            if i < n and signal[i] == high_value:
+                transition = i
+                while i < n and signal[i] == high_value:
+                    i += 1
+                end = i - 1
+                periods.append((start, transition, end))
+            else:
+                i += 1
+        else:
+            i += 1
+
+    return periods
+
+# %%
 env_type = "varenv"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval.txt"
 eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
@@ -67,9 +93,14 @@ for param in param_agent:
 
     np.random.seed(1)
     choices = np.random.choice(100, 3)
+    fig2, ax2 = plt.subplots()
+    ax2_xticks = set()
+
     for i in choices:
         tcbkrs = tcbk_list[i]
         t = tcbkrs[0]
+        cell = tcbkrs[1]
+        drug = tcbkrs[2]
         phiR = tcbkrs[4]
         phiS = tcbkrs[5]
         phiP = phiR_max - phiR - phiS
@@ -78,8 +109,16 @@ for param in param_agent:
         phiD = 0.1 * phiR
         phiR -= phiD
 
-        t_choices = np.linspace(warm_up_embed, tcbkrs.shape[1]-2, num_of_pies, dtype=int)
-    
+        prds = detect_low_high_periods(drug)
+        if len(prds) == 0:
+            t_choices = np.linspace(warm_up_embed, tcbkrs.shape[1]-2, num_of_pies, dtype=int)
+        else:
+            prd = prds[-1]
+            start, transition, end = prd
+            t_choices = np.linspace(start, transition, num_of_pies - 1, dtype=int)
+            t_choices = np.append(t_choices, end - 1)
+            # t_choices = np.clip(t_choices, warm_up_embed, tcbkrs.shape[1]-2)
+
         fig, axs = plt.subplots(1, num_of_pies, figsize=(4*num_of_pies, 4))
         for j, ax in enumerate(axs):
             t_point = t_choices[j]
@@ -93,9 +132,14 @@ for param in param_agent:
             )
             ax.set_title(f"t = {t[t_point]:.1f} h", fontsize=20)
 
+            ax2_xticks.add(t[t_point])
+            # ax2.plot([t[t_point], t[t_point]], [0, 1], color="black", linestyle="--", linewidth=1)
+            ax2.axvline(x=t[t_point], color="black", linestyle="--", linewidth=1)
+        ax2.plot(t, cell)
+
         fig.tight_layout()
 
-        out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval_pie" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/{i}.pdf"
+        out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval_pie_2" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/{i}.pdf"
         out_path = os.path.dirname(out_name)
         os.makedirs(out_path, exist_ok=True)
 
@@ -105,7 +149,7 @@ for param in param_agent:
             bbox_inches='tight',
         )
 
-        out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval_pie" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/{i}.jpg"
+        out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval_pie_2" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/{i}.jpg"
         out_path = os.path.dirname(out_name)
         os.makedirs(out_path, exist_ok=True)
 
@@ -116,5 +160,22 @@ for param in param_agent:
         )
         plt.close(fig)
 
+    ax2_xticks = np.round(sorted(ax2_xticks), 1)
+    
+    ax2.set_xticks(ax2_xticks)
+    ax2.tick_params(axis='x', labelrotation=45)
+    ax2.set_yscale('log')
+
+    fig2.savefig(
+        BASE_PATH / "figures_pdf" / "var_nutrient" / "eval_pie_2" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/xticks.pdf",
+        dpi = 300,
+        bbox_inches='tight'
+    )
+    fig2.savefig(
+        BASE_PATH / "figures_jpg" / "var_nutrient" / "eval_pie_2" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}/xticks.jpg",
+        dpi = 300,
+        bbox_inches='tight'
+    )
+    plt.close(fig2)
 
 # %%
