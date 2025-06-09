@@ -42,6 +42,7 @@ if MAIN:
     # k_n0_observation = False
     # b_observation = True
     use_gpu = False
+    k_n0_actions = [float(nutr) for nutr in nutrient_range.split('_')]
 
     cell_config = CellConfig()
     env_config = EnvConfig(
@@ -51,8 +52,9 @@ if MAIN:
         b_observation = b_observation,
         k_n0_observation = k_n0_observation,
         delay_embed_len = delay_embed_len,
-        k_n0_actions = [float(nutr) for nutr in nutrient_range.split('_')],
+        k_n0_actions = k_n0_actions,
         b_actions = [0, antibiotic_value],
+        num_actions = len(k_n0_actions) * 2,
     )
 
     env = ControlNutrientEnv(env_config, cell_config)
