@@ -1,6 +1,7 @@
 import os
 import sys
 import pickle
+import numpy as np
 
 from envs.cell_model import CellConfig
 from envs.envs import EnvConfig, VariableNutrientEnv
@@ -39,7 +40,8 @@ if MAIN:
         b_actions = [0, antibiotic_value],
         T_k_n0 = T_k_n0,
         k_n0_mean = 2.55,
-        sigma_kn0 = 0.1
+        sigma_kn0 = 0.1,
+        max_pop = np.inf,
     )
 
     env = VariableNutrientEnv(env_config, cell_config)

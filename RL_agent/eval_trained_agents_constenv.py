@@ -1,6 +1,7 @@
 import os
 import sys
 import pickle
+import numpy as np
 
 from envs.cell_model import CellConfig
 from envs.envs import EnvConfig, ConstantNutrientEnv
@@ -32,11 +33,14 @@ if MAIN:
     use_gpu = False
 
     cell_config = CellConfig()
-    env_config = EnvConfig(k_n0_observation = k_n0_observation,
-                           b_observation = b_observation,
-                           k_n0_constant = nutrient_value,
-                           delay_embed_len = delay_embed_len,
-                           b_actions = [0, antibiotic_value])
+    env_config = EnvConfig(
+        k_n0_observation = k_n0_observation,
+        b_observation = b_observation,
+        k_n0_constant = nutrient_value,
+        delay_embed_len = delay_embed_len,
+        b_actions = [0, antibiotic_value],
+        max_pop = np.inf,
+    )
 
     env = ConstantNutrientEnv(env_config, cell_config)
     c = CDQL(env,

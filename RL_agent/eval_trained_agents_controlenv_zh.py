@@ -1,6 +1,7 @@
 import os
 import sys
 import pickle
+import numpy as np
 
 from envs.cell_model import CellConfig
 from envs.envs import EnvConfig, ControlNutrientEnv
@@ -45,6 +46,7 @@ if MAIN:
         k_n0_actions = k_n0_actions,
         b_actions = [0, antibiotic_value],
         num_actions = len(k_n0_actions) * 2,
+        max_pop = np.inf,
     )
 
     env = ControlNutrientEnv(env_config, cell_config)
