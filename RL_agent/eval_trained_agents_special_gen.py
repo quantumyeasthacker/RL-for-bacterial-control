@@ -2,6 +2,7 @@ import os
 import sys
 import pickle
 
+import numpy as np
 from envs.cell_model import CellConfig
 from envs.envs import EnvConfig, ConstantNutrientEnv, VariableNutrientEnv
 from agent.MLP_full import CDQL
@@ -41,7 +42,8 @@ if MAIN:
             b_observation = b_observation,
             k_n0_constant = float(eval_variable),
             delay_embed_len = delay_embed_len,
-            b_actions = [0, antibiotic_value]
+            b_actions = [0, antibiotic_value],
+            max_pop = np.inf,
         )
         env = ConstantNutrientEnv(env_config, cell_config)
     elif eval_env == "varenv":
@@ -52,7 +54,8 @@ if MAIN:
             b_actions = [0, antibiotic_value],
             T_k_n0 = int(eval_variable),
             k_n0_mean = 2.55,
-            sigma_kn0 = 0.1
+            sigma_kn0 = 0.1,
+            max_pop = np.inf,
         )
         env = VariableNutrientEnv(env_config, cell_config)
         
