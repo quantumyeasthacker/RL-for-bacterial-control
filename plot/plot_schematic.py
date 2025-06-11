@@ -4,14 +4,14 @@ import numpy as np
 import pickle
 
 # %%
-with open("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/20250325_varenv/results_delay_30_varenv_eval/a3.72_T6_delay30_rep0/trial_1tcbk.pkl", "rb") as f:
-    info = pickle.load(f)
-    tkbc = np.array(info["log"])
-    tcbk = tkbc[:,[0,3,2,1,5,6]].T
+# with open("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/20250325_varenv/results_delay_30_varenv_eval/a3.72_T6_delay30_rep0/trial_1tcbk.pkl", "rb") as f:
+#     info = pickle.load(f)
+#     tkbc = np.array(info["log"])
+#     tcbk = tkbc[:,[0,3,2,1,5,6]].T
 
-t = tcbk[0]
-b = tcbk[2]
-k = tcbk[3]
+# t = tcbk[0]
+# b = tcbk[2]
+# k = tcbk[3]
 
 # %% constant
 # x = np.linspace(0, 10, 100)

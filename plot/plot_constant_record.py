@@ -21,7 +21,7 @@ EPS = 1e-6
 default_color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
 # BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/")
-BASE_PATH = Path("/mnt/d/bacterial_adaptation/working_folder")
+BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
 
 # %%
 delta_t = 0.2

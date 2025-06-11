@@ -18,7 +18,7 @@ mpl.rcParams['ps.fonttype'] = 42
 
 EPS = 1e-6
 
-BASE_PATH = Path("/mnt/d/bacterial_adaptation/working_folder")
+BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
 
 # %%
 delta_t = 0.2

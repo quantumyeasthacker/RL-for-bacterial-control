@@ -12,7 +12,8 @@ import numpy as np
 from statsmodels.nonparametric.smoothers_lowess import lowess
 
 
-BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/20250407/figures")
+# BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/20250407/figures")
+BASE_PATH = Path("/home/zihangw/BacteriaAdaptation/figures")
 
 api = wandb.Api()
 entity = "zihangwen-carnegie-mellon-university"

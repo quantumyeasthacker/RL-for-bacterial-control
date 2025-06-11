@@ -61,6 +61,7 @@ def load_logger_data_new(folder_name, max_length, max_pop, n_trials = 100, RS = 
     max_id = 0
     min_len = max_length
     min_id = 0
+    exceed_max_pop = False
     for i in range(n_trials):
         fname = "trial_%d"%i
         try:
@@ -87,6 +88,7 @@ def load_logger_data_new(folder_name, max_length, max_pop, n_trials = 100, RS = 
             max_id = i
         
         if tcbk[1,-1] > max_pop and tcbk.shape[1] < min_len:
+            exceed_max_pop = True
             min_len = tcbk.shape[1]
             min_id = i
     
@@ -100,7 +102,7 @@ def load_logger_data_new(folder_name, max_length, max_pop, n_trials = 100, RS = 
     # cell_ave = np.mean(np.array(cell_list), axis=0)
     cell_array = np.array(cell_list)
     
-    return tcbk_list, t, b, k_n0, cell_array, (max_len, max_id)
+    return tcbk_list, t, b, k_n0, cell_array, (max_len, max_id, exceed_max_pop)
 
 
 def plot_single(
@@ -111,7 +113,7 @@ def plot_single(
         more_nutrient = False,
 ):
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
-    tcbk_list, t, b, k_n0, cell_array, (_, max_id) = loaded_logger
+    tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
     # cell_ave = np.mean(cell_array, axis=0)
     
     figure, ax = plt.subplots(5,1)
@@ -183,7 +185,7 @@ def plot_single_varenv(
         n_trials = 100
 ):
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
-    tcbk_list, t, b, k_n0, cell_array, (_, max_id) = loaded_logger
+    tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
     # cell_ave = np.mean(cell_array, axis=0)
     
     np.random.seed(1)
@@ -249,7 +251,7 @@ def plot_single_separate(
         warm_up_embed = 61,
 ):
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
-    tcbk_list, t, b, k_n0, _, (_, max_id) = loaded_logger
+    tcbk_list, t, b, k_n0, _, (_, max_id, _) = loaded_logger
 
     out_path = os.path.dirname(out_name)
     out_name_type = str(out_name).split(".")[-1]

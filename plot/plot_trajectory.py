@@ -20,7 +20,7 @@ mpl.rcParams['ps.fonttype'] = 42
 EPS = 1e-6
 # COLOR_LIST = ["#dec60c", "#a7c82f", "#548c6a"]
 # BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/")
-BASE_PATH = Path("/mnt/d/bacterial_adaptation/working_folder")
+BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
 
 # %%
 delta_t = 0.2
