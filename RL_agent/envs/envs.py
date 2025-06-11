@@ -20,7 +20,7 @@ class EnvConfig:
     # max_time: float = 40 # hours
 
     # observation parameters
-    delay_embed_len: int = 20
+    delay_embed_len: int = 30
     k_n0_observation: bool = True
     b_observation: bool = True
     omega: float = 0.02
