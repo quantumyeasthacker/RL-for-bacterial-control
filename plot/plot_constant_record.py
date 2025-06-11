@@ -62,6 +62,7 @@ df_constant_eval["training_episode_int"] = df_constant_eval["training_episode"].
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+freq_std_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
@@ -77,8 +78,10 @@ for param in param_agent:
             freq_param_list += [freq]
     if len(freq_param_list) == 0:
         freq_list += [0]
+        freq_std_list += [0]
     else:
         freq_list += [np.mean(freq_param_list)]
+        freq_std_list += [np.std(freq_param_list)]
     
     eval_cell_list += [np.log10(cell_array[:, warm_up_embed:].mean(axis=1)).mean()]
     eval_cell_std_list += [np.log10(cell_array[:, warm_up_embed:].mean(axis=1)).std()]
@@ -87,6 +90,7 @@ df_constant_eval["eval_log_cell"] = eval_cell_list
 df_constant_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_constant_eval["eval_log_cell"] = np.log10(df_constant_eval["eval_final_cell"])
 df_constant_eval["eval_freq"] = freq_list
+df_constant_eval["eval_freq_std"] = freq_std_list
 
 # %%
 sum_df = df_constant_eval.groupby(["inst_combination", "rep"])["eval_log_cell"].sum().reset_index()
@@ -101,11 +105,12 @@ nutrient_value_selected = 2.0
 df_constant_eval_app_selected = df_constant_eval_app[df_constant_eval_app["nutrient_value"] == 2.0]
 
 # %%
-df_plot = df_constant_eval_app_selected[["training_episode_int", "eval_log_cell", "eval_log_cell_std", "eval_freq"]].copy().sort_values("training_episode_int")
+df_plot = df_constant_eval_app_selected[["training_episode_int", "eval_log_cell", "eval_log_cell_std", "eval_freq", "eval_freq_std"]].copy().sort_values("training_episode_int")
 x = df_plot["training_episode_int"].values
 y1_mean = df_plot["eval_log_cell"].values
 y1_std = df_plot["eval_log_cell_std"].values
 y2 = df_plot["eval_freq"].values
+y2_std = df_plot["eval_freq_std"].values
 
 fig = plt.figure(figsize=(8, 6))
 
@@ -119,6 +124,7 @@ p1, = host.plot(x, y1_mean, label="Average Population Size", color='tab:blue')
 p2, = par1.plot(x, y2, label="Pulsing Frequency", color='tab:red')
 
 host.fill_between(x, y1_mean - y1_std, y1_mean + y1_std, color='tab:blue', alpha=0.2)
+par1.fill_between(x, y2 - y2_std, y2 + y2_std, color='tab:red', alpha=0.2)
 
 host.set(xlabel = "Training Episode", ylabel = "Average Population Size")
 par1.set(ylabel = "Pulsing Frequency")
@@ -126,8 +132,8 @@ par1.set(ylabel = "Pulsing Frequency")
 host.axis["left"].label.set_color(p1.get_color())
 par1.axis["right"].label.set_color(p2.get_color())
 
-fig.savefig(BASE_PATH / f"figures" / "pop_size_pulsing_freq.pdf", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / f"figures" / "pop_size_pulsing_freq.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / f"figures_pdf" / "pop_size_pulsing_freq_err_area.pdf", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / f"figures_jpg" / "pop_size_pulsing_freq_err_area.jpg", dpi=600, bbox_inches='tight')
 
 # plt.close(fig)
 

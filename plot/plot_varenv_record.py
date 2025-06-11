@@ -76,8 +76,8 @@ for param in param_agent:
         time, cell_count, drug, nutr = tcbk
 
         drug = drug[warm_up_embed:]
-        nutr = nutr[(warm_up_embed-30):] # embedding len
-        # nutr = nutr[(warm_up_embed):] # embedding len
+        # nutr = nutr[(warm_up_embed-30):] # embedding len
+        nutr = nutr[(warm_up_embed):] # embedding len
         if np.std(drug) != 0 and np.std(nutr) != 0:
             corr, lag = cross_correlation(drug, nutr)
         
@@ -163,8 +163,9 @@ par1.axis["right"].label.set_color(p2.get_color())
 # Title and show
 # fig.suptitle("Average Total Reward and Correlation and Lag of Nutrient and Antibiotic conc. vs. Training Episode")
 # fig.tight_layout()
-fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_T{T_k_n0}_no_truncate_nutr.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_T{T_k_n0}_no_truncate_nutr.pdf", dpi=600, bbox_inches='tight')
+# fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_T{T_k_n0}_no_truncate_nutr.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_T{T_k_n0}.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_T{T_k_n0}.pdf", dpi=600, bbox_inches='tight')
 plt.close(fig)
 
 fig, ax = plt.subplots(figsize=(8, 6))
@@ -174,8 +175,8 @@ ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
 ax.set(xlabel = "Training Episode (_step)", ylabel = "Lag of nutrient and antibiotic conc.")
 ax.legend(loc='upper right')
 # ax.set_title("Lag of Nutrient and Antibiotic Concentration vs. Training Episode")
-fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_lag_T{T_k_n0}_no_truncate_nutr.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_lag_T{T_k_n0}_no_truncate_nutr.pdf", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_lag_T{T_k_n0}.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_lag_T{T_k_n0}.pdf", dpi=600, bbox_inches='tight')
 plt.close(fig)
 
 fig, ax = plt.subplots(figsize=(8, 6))
@@ -184,8 +185,8 @@ ax.fill_between(x, y4_mean - y4_std, y4_mean + y4_std, color='tab:orange', alpha
 ax.set(xlabel = "Training Episode (_step)", ylabel = "Extinct Fraction")
 ax.legend(loc='upper right')
 # ax.set_title("Extinct Fraction vs. Training Episode")
-fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_extinct_fraction_T{T_k_n0}_no_truncate_nutr.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_extinct_fraction_T{T_k_n0}_no_truncate_nutr.pdf", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_jpg" / f"mean_std_extinct_fraction_T{T_k_n0}.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / f"mean_std_extinct_fraction_T{T_k_n0}.pdf", dpi=600, bbox_inches='tight')
 plt.close(fig)
 
 # %%

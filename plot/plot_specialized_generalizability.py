@@ -61,6 +61,8 @@ df_constant_sim["nutrient_value"] = df_constant_sim["nutrient_value"].astype(flo
 final_cell_list = []
 final_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_sim:
     half_period = int(param[0])
     initialize_app = param[1]
@@ -74,6 +76,12 @@ for param in param_sim:
     else:
         freq = 1 / (half_period * 2 * delta_t)
     freq_list.append(freq)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     # freq_param_list = []
     # for tcbk in tcbk_list:
@@ -93,6 +101,8 @@ df_constant_sim["sim_log_cell"] = final_cell_list
 df_constant_sim["sim_log_cell_std"] = final_cell_std_list
 # df_constant_sim["sim_log_cell"] = np.log10(df_constant_sim["sim_final_cell"])
 df_constant_sim["sim_freq"] = freq_list
+df_constant_sim["extinction_frac"] = extinction_frac_list
+df_constant_sim["extinction_rate"] = extinction_rate_list
 
 df_constant_sim_cst_app = df_constant_sim[df_constant_sim["initialize_app"] == "constant"]
 
@@ -125,6 +135,8 @@ df_constant_eval["training_episode_int"] = df_constant_eval["training_episode"].
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
@@ -132,6 +144,12 @@ for param in param_agent:
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
     
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
+
     freq_param_list = []
     for tcbk in tcbk_list:
         b = tcbk[2,warm_up_embed:]
@@ -150,6 +168,8 @@ df_constant_eval["eval_log_cell"] = eval_cell_list
 df_constant_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_constant_eval["eval_log_cell"] = np.log10(df_constant_eval["eval_final_cell"])
 df_constant_eval["eval_freq"] = freq_list
+df_constant_eval["extinction_frac"] = extinction_frac_list
+df_constant_eval["extinction_rate"] = extinction_rate_list
 
 # %% ----- ----- ----- ----- varenv sim ----- ----- ----- ----- %% #
 env_type = "varenv"
@@ -179,6 +199,8 @@ df_varenv_sim["T_k0"] = df_varenv_sim["T_k0"].astype(int)
 final_cell_list = []
 final_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_sim:
     # half_period = int(param[0])
     initialize_app = param[1]
@@ -193,6 +215,12 @@ for param in param_sim:
     else:
         freq = 1 / (half_period * 2 * delta_t)
     freq_list.append(freq)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     # freq_param_list = []
     # for tcbk in tcbk_list:
@@ -213,6 +241,8 @@ df_varenv_sim["sim_log_cell"] = final_cell_list
 df_varenv_sim["sim_log_cell_std"] = final_cell_std_list
 # df_varenv_sim["sim_log_cell"] = np.log10(df_varenv_sim["sim_final_cell"])
 df_varenv_sim["sim_freq"] = freq_list
+df_varenv_sim["extinction_frac"] = extinction_frac_list
+df_varenv_sim["extinction_rate"] = extinction_rate_list
 
 df_varenv_sim_cst_app = df_varenv_sim[df_varenv_sim["initialize_app"] == "constant"]
 
@@ -245,12 +275,20 @@ df_varenv_eval["training_episode_int"] = df_varenv_eval["training_episode"].map(
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
     folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     freq_param_list = []
     for tcbk in tcbk_list:
@@ -271,6 +309,8 @@ df_varenv_eval["eval_log_cell"] = eval_cell_list
 df_varenv_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_varenv_eval["eval_log_cell"] = np.log10(df_varenv_eval["eval_final_cell"])
 df_varenv_eval["eval_freq"] = freq_list
+df_varenv_eval["extinction_frac"] = extinction_frac_list
+df_varenv_eval["extinction_rate"] = extinction_rate_list
 
 # %% ----- ----- ----- ----- special_gen eval ----- ----- ----- ----- %% #
 env_type = "special_gen"
@@ -297,25 +337,27 @@ df_special_gen_eval["delay_embed_len"] = df_special_gen_eval["delay_embed_len"].
 df_special_gen_eval["rep"] = df_special_gen_eval["rep"].astype(int)
 df_special_gen_eval["episodes"] = df_special_gen_eval["episodes"].astype(int)
 
-df_special_gen_eval = df_special_gen_eval.loc[df_special_gen_eval["episodes"] == 400].reset_index(drop=True) ##### temporary
-
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     total_episodes = int(param[6])
     training_episode = param[7]
     folder_name = f"a{param[0]}_{param[1]}_delay{param[2]}_rep{param[5]}_{param[3]}_{param[4]}"
-    if total_episodes != 400: ##### temporary
-        continue
-    # if folder_name in running_list:
-    #     continue
     folder_name = eval_folder / folder_name / training_episode
     # print(len(os.listdir(folder_name)))
 
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     freq_param_list = []
     for tcbk in tcbk_list:
@@ -336,19 +378,47 @@ df_special_gen_eval["eval_log_cell"] = eval_cell_list
 df_special_gen_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_special_gen_eval["eval_log_cell"] = np.log10(df_special_gen_eval["eval_final_cell"])
 df_special_gen_eval["eval_freq"] = freq_list
+df_special_gen_eval["extinction_frac"] = extinction_frac_list
+df_special_gen_eval["extinction_rate"] = extinction_rate_list
 
 # %% ----- ----- ----- ----- gen v.s. special ----- ----- ----- ----- %% #
 # df_constant_sim_cst_app
 # df_constant_eval
+def get_best_row(group):
+    # Filter to extinction_frac == 1
+    extinct = group[group["extinction_frac"] == 1]
+    if not extinct.empty:
+        # Pick the row with min eval_log_cell among extinct
+        return extinct.loc[extinct["eval_log_cell"].idxmin()]
+    else:
+        # Fall back to row with min eval_log_cell overall
+        return group.loc[group["eval_log_cell"].idxmin()]
 
-df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+def get_best_row_extinct_rate(group):
+    # Filter to extinction_frac == 1
+    extinct = group[group["extinction_frac"] == 1]
+    if not extinct.empty:
+        # Pick the row with min eval_log_cell among extinct
+        return extinct.loc[extinct["extinction_rate"].idxmax()]
+    else:
+        # Fall back to row with min eval_log_cell overall
+        return group.loc[group["eval_log_cell"].idxmin()]
+
+# %%
+df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
+    get_best_row_extinct_rate, include_groups=True
+).reset_index(drop=True)
+# df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_constant_eval_app = df_constant_eval_app.merge(df_constant_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_constant_eval_app["log_diff"] = df_constant_eval_app["sim_log_cell"] - df_constant_eval_app["eval_log_cell"]
 
 # df_varenv_sim_cst_app
 # df_varenv_eval
 
-df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False).apply(
+    get_best_row_extinct_rate, include_groups=True
+).reset_index(drop=True)
+# df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_varenv_eval_app = df_varenv_eval_app.merge(df_varenv_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_varenv_eval_app["log_diff"] = df_varenv_eval_app["sim_log_cell"] - df_varenv_eval_app["eval_log_cell"]
 
@@ -504,5 +574,143 @@ plt.xticks(rotation=45)
 fig.tight_layout()
 fig.savefig(BASE_PATH / "figures_jpg" / "special_gen.jpg", dpi=600, bbox_inches='tight')
 fig.savefig(BASE_PATH / "figures_pdf" / "special_gen.pdf", dpi=600, bbox_inches='tight')
+
+# %% ----- ----- ----- ----- plot gen v.s. special (extinction fraq) ----- ----- ----- ----- %% #
+df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "extinction_frac"]].copy()
+df1["source"] = "Agents " + df1["trained_env"]
+# df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+# COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+df2 = df_eval_app_trained[["trained_env", "inst_combination", "extinction_frac"]].copy()
+# df2["source"] = "Specialized Agents"
+df2["source"] = "Agents " + df2["trained_env"]
+# df2["color"] = "#17becf"
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+combined_df = pd.concat([df1, df2])
+combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
+
+# text replacement for inst_combination
+mapping = {"constenv_1.00": "n1.00", "constenv_2.00": "n2.00", "constenv_3.00": "n3.00", "constenv_4.00": "n4.00",
+           "varenv_6": "T6", "varenv_12": "T12", "varenv_18": "T18", "varenv_24": "T24"}
+combined_df['inst_combination'] = combined_df['inst_combination'].replace(mapping)
+# plot_order = np.unique(combined_df['inst_combination'])
+
+inst_order = ["n1.00", "n2.00", "n3.00", "n4.00", "T6", "T12", "T18", "T24"]
+agent_order = ["Agents n1.00", "Agents n2.00", "Agents n3.00", "Agents n4.00",
+               "Agents T6", "Agents T12", "Agents T18", "Agents T24"]
+
+combined_df["inst_combination"] = pd.Categorical(
+    combined_df["inst_combination"],
+    categories=inst_order,
+    ordered=True
+)
+combined_df["source"] = pd.Categorical(
+    combined_df["source"],
+    categories=agent_order,
+    ordered=True
+)
+combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
+
+sns.barplot(
+    data=combined_df,
+    x='inst_combination',
+    y='extinction_frac',
+    order=inst_order,
+    gap=0.15,
+    hue='source',
+    errorbar=('ci', None),  # disable automatic CI bars
+    err_kws={'linewidth': 1},
+    capsize=0.1
+)
+ax.axhline(0, color='gray', linewidth=1, linestyle='--')
+# for container in ax.containers:
+#     ax.bar_label(container, fmt='%.2f', padding=3)
+box_list = [i*9 for i in range(8)]
+for i, patch in enumerate(ax.patches):
+    if i not in box_list:
+        continue
+    patch.set_edgecolor('black')
+    patch.set_linewidth(1.5)
+
+ax.set_title('Generalizability of Specialized Agents')
+ax.set_xlabel('Evaluation Environment')
+# ax.set_ylabel(r'$\Delta \log(population\ size)$')
+# ax.set_ylabel(r'$\log(P_{constant})-\log(P_{pulsing})$')
+ax.set_ylabel(r'Extinction Probability')
+ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xticks(rotation=45)
+fig.tight_layout()
+fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct.pdf", dpi=600, bbox_inches='tight')
+
+# %% ----- ----- ----- ----- plot gen v.s. special (extinction rate) ----- ----- ----- ----- %% #
+df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "extinction_rate"]].copy()
+df1["source"] = "Agents " + df1["trained_env"]
+# df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+# COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+df2 = df_eval_app_trained[["trained_env", "inst_combination", "extinction_rate"]].copy()
+# df2["source"] = "Specialized Agents"
+df2["source"] = "Agents " + df2["trained_env"]
+# df2["color"] = "#17becf"
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+combined_df = pd.concat([df1, df2])
+combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
+
+# text replacement for inst_combination
+mapping = {"constenv_1.00": "n1.00", "constenv_2.00": "n2.00", "constenv_3.00": "n3.00", "constenv_4.00": "n4.00",
+           "varenv_6": "T6", "varenv_12": "T12", "varenv_18": "T18", "varenv_24": "T24"}
+combined_df['inst_combination'] = combined_df['inst_combination'].replace(mapping)
+# plot_order = np.unique(combined_df['inst_combination'])
+
+inst_order = ["n1.00", "n2.00", "n3.00", "n4.00", "T6", "T12", "T18", "T24"]
+agent_order = ["Agents n1.00", "Agents n2.00", "Agents n3.00", "Agents n4.00",
+               "Agents T6", "Agents T12", "Agents T18", "Agents T24"]
+
+combined_df["inst_combination"] = pd.Categorical(
+    combined_df["inst_combination"],
+    categories=inst_order,
+    ordered=True
+)
+combined_df["source"] = pd.Categorical(
+    combined_df["source"],
+    categories=agent_order,
+    ordered=True
+)
+combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
+
+sns.barplot(
+    data=combined_df,
+    x='inst_combination',
+    y='extinction_rate',
+    order=inst_order,
+    gap=0.15,
+    hue='source',
+    errorbar=('ci', None),  # disable automatic CI bars
+    err_kws={'linewidth': 1},
+    capsize=0.1
+)
+ax.axhline(0, color='gray', linewidth=1, linestyle='--')
+# for container in ax.containers:
+#     ax.bar_label(container, fmt='%.2f', padding=3)
+box_list = [i*9 for i in range(8)]
+for i, patch in enumerate(ax.patches):
+    if i not in box_list:
+        continue
+    patch.set_edgecolor('black')
+    patch.set_linewidth(1.5)
+
+ax.set_title('Generalizability of Specialized Agents')
+ax.set_xlabel('Evaluation Environment')
+# ax.set_ylabel(r'$\Delta \log(population\ size)$')
+# ax.set_ylabel(r'$\log(P_{constant})-\log(P_{pulsing})$')
+ax.set_ylabel(r'Extinction rate')
+ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xticks(rotation=45)
+fig.tight_layout()
+# fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct_rate.jpg", dpi=600, bbox_inches='tight')
+# fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct.pdf", dpi=600, bbox_inches='tight')
 
 # %%

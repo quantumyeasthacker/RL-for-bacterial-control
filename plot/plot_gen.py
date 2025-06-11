@@ -297,7 +297,7 @@ df_generalized_eval["delay_embed_len"] = df_generalized_eval["delay_embed_len"].
 df_generalized_eval["rep"] = df_generalized_eval["rep"].astype(int)
 df_generalized_eval["episodes"] = df_generalized_eval["episodes"].astype(int)
 
-df_generalized_eval = df_generalized_eval.loc[df_generalized_eval["episodes"] == 400].reset_index(drop=True) ##### temporary
+# df_generalized_eval = df_generalized_eval.loc[df_generalized_eval["episodes"] == 400].reset_index(drop=True) ##### temporary
 
 eval_cell_list = []
 eval_cell_std_list = []
@@ -307,8 +307,8 @@ for param in param_agent:
     total_episodes = int(param[6])
     training_episode = param[7]
     folder_name = f"a{param[0]}_{param[1]}_delay{param[2]}_episodes{param[6]}_rep{param[5]}_{param[3]}_{param[4]}"
-    if total_episodes != 400: ##### temporary
-        continue
+    # if total_episodes != 400: ##### temporary
+    #     continue
     # if folder_name in running_list:
     #     continue
     folder_name = eval_folder / folder_name / training_episode
