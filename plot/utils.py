@@ -15,6 +15,26 @@ ANTIBIOTIC_COLOR = "#216d87"
 POP_SIZE_COLOR = "#35a97b"
 
 
+def get_best_row(group):
+    # Filter to extinction_frac == 1
+    extinct = group[group["extinction_frac"] == 1]
+    if not extinct.empty:
+        # Pick the row with min eval_log_cell among extinct
+        return extinct.loc[extinct["eval_log_cell"].idxmin()]
+    else:
+        # Fall back to row with min eval_log_cell overall
+        return group.loc[group["eval_log_cell"].idxmin()]
+
+def get_best_row_extinct_rate(group):
+    # Filter to extinction_frac == 1
+    extinct = group[group["extinction_frac"] == 1]
+    if not extinct.empty:
+        # Pick the row with min eval_log_cell among extinct
+        return extinct.loc[extinct["extinction_rate"].idxmax()]
+    else:
+        # Fall back to row with min eval_log_cell overall
+        return group.loc[group["eval_log_cell"].idxmin()]
+
 def expand_and_fill(vec, threshold):
     """Expands the vector to the given threshold length, filling with zeros if necessary."""
     if len(vec) >= threshold:

@@ -7,7 +7,7 @@ import pickle
 import seaborn as sns
 # from scipy.optimize import curve_fit
 import matplotlib as mpl
-from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new
+from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate
 from pathlib import Path
 
 
@@ -384,27 +384,7 @@ df_special_gen_eval["extinction_rate"] = extinction_rate_list
 # %% ----- ----- ----- ----- gen v.s. special ----- ----- ----- ----- %% #
 # df_constant_sim_cst_app
 # df_constant_eval
-def get_best_row(group):
-    # Filter to extinction_frac == 1
-    extinct = group[group["extinction_frac"] == 1]
-    if not extinct.empty:
-        # Pick the row with min eval_log_cell among extinct
-        return extinct.loc[extinct["eval_log_cell"].idxmin()]
-    else:
-        # Fall back to row with min eval_log_cell overall
-        return group.loc[group["eval_log_cell"].idxmin()]
 
-def get_best_row_extinct_rate(group):
-    # Filter to extinction_frac == 1
-    extinct = group[group["extinction_frac"] == 1]
-    if not extinct.empty:
-        # Pick the row with min eval_log_cell among extinct
-        return extinct.loc[extinct["extinction_rate"].idxmax()]
-    else:
-        # Fall back to row with min eval_log_cell overall
-        return group.loc[group["eval_log_cell"].idxmin()]
-
-# %%
 df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
     get_best_row_extinct_rate, include_groups=True
 ).reset_index(drop=True)
@@ -710,7 +690,7 @@ ax.set_ylabel(r'Extinction rate')
 ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.xticks(rotation=45)
 fig.tight_layout()
-# fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct_rate.jpg", dpi=600, bbox_inches='tight')
-# fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct.pdf", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct_rate.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct_rate.pdf", dpi=600, bbox_inches='tight')
 
 # %%

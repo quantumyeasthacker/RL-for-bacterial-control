@@ -7,7 +7,7 @@ import pickle
 import seaborn as sns
 # from scipy.optimize import curve_fit
 import matplotlib as mpl
-from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new
+from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate
 from pathlib import Path
 
 
@@ -61,6 +61,8 @@ df_constant_sim["nutrient_value"] = df_constant_sim["nutrient_value"].astype(flo
 final_cell_list = []
 final_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_sim:
     half_period = int(param[0])
     initialize_app = param[1]
@@ -74,6 +76,12 @@ for param in param_sim:
     else:
         freq = 1 / (half_period * 2 * delta_t)
     freq_list.append(freq)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     # freq_param_list = []
     # for tcbk in tcbk_list:
@@ -93,6 +101,8 @@ df_constant_sim["sim_log_cell"] = final_cell_list
 df_constant_sim["sim_log_cell_std"] = final_cell_std_list
 # df_constant_sim["sim_log_cell"] = np.log10(df_constant_sim["sim_final_cell"])
 df_constant_sim["sim_freq"] = freq_list
+df_constant_sim["extinction_frac"] = extinction_frac_list
+df_constant_sim["extinction_rate"] = extinction_rate_list
 
 df_constant_sim_cst_app = df_constant_sim[df_constant_sim["initialize_app"] == "constant"]
 
@@ -125,6 +135,8 @@ df_constant_eval["training_episode_int"] = df_constant_eval["training_episode"].
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
@@ -132,6 +144,12 @@ for param in param_agent:
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
     
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
+
     freq_param_list = []
     for tcbk in tcbk_list:
         b = tcbk[2,warm_up_embed:]
@@ -150,6 +168,8 @@ df_constant_eval["eval_log_cell"] = eval_cell_list
 df_constant_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_constant_eval["eval_log_cell"] = np.log10(df_constant_eval["eval_final_cell"])
 df_constant_eval["eval_freq"] = freq_list
+df_constant_eval["extinction_frac"] = extinction_frac_list
+df_constant_eval["extinction_rate"] = extinction_rate_list
 
 # %% ----- ----- ----- ----- varenv sim ----- ----- ----- ----- %% #
 env_type = "varenv"
@@ -179,6 +199,8 @@ df_varenv_sim["T_k0"] = df_varenv_sim["T_k0"].astype(int)
 final_cell_list = []
 final_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_sim:
     # half_period = int(param[0])
     initialize_app = param[1]
@@ -193,6 +215,12 @@ for param in param_sim:
     else:
         freq = 1 / (half_period * 2 * delta_t)
     freq_list.append(freq)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     # freq_param_list = []
     # for tcbk in tcbk_list:
@@ -213,6 +241,8 @@ df_varenv_sim["sim_log_cell"] = final_cell_list
 df_varenv_sim["sim_log_cell_std"] = final_cell_std_list
 # df_varenv_sim["sim_log_cell"] = np.log10(df_varenv_sim["sim_final_cell"])
 df_varenv_sim["sim_freq"] = freq_list
+df_varenv_sim["extinction_frac"] = extinction_frac_list
+df_varenv_sim["extinction_rate"] = extinction_rate_list
 
 df_varenv_sim_cst_app = df_varenv_sim[df_varenv_sim["initialize_app"] == "constant"]
 
@@ -245,12 +275,20 @@ df_varenv_eval["training_episode_int"] = df_varenv_eval["training_episode"].map(
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
     folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
+
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
 
     freq_param_list = []
     for tcbk in tcbk_list:
@@ -271,6 +309,9 @@ df_varenv_eval["eval_log_cell"] = eval_cell_list
 df_varenv_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_varenv_eval["eval_log_cell"] = np.log10(df_varenv_eval["eval_final_cell"])
 df_varenv_eval["eval_freq"] = freq_list
+df_varenv_eval["extinction_frac"] = extinction_frac_list
+df_varenv_eval["extinction_rate"] = extinction_rate_list
+
 
 # %% ----- ----- ----- ----- generalized eval ----- ----- ----- ----- %% #
 env_type = "generalized"
@@ -302,6 +343,8 @@ df_generalized_eval["episodes"] = df_generalized_eval["episodes"].astype(int)
 eval_cell_list = []
 eval_cell_std_list = []
 freq_list = []
+extinction_frac_list = []
+extinction_rate_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     total_episodes = int(param[6])
@@ -317,6 +360,12 @@ for param in param_agent:
     tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, False)
     # cell_ave = np.mean(cell_array, axis=0)
 
+    extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
+    extinction_frac_list.append(np.mean(extinction))
+
+    extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
+    extinction_rate_list.append(np.mean(extinction_rate))
+    
     freq_param_list = []
     for tcbk in tcbk_list:
         b = tcbk[2,warm_up_embed:]
@@ -336,19 +385,26 @@ df_generalized_eval["eval_log_cell"] = eval_cell_list
 df_generalized_eval["eval_log_cell_std"] = eval_cell_std_list
 # df_generalized_eval["eval_log_cell"] = np.log10(df_generalized_eval["eval_final_cell"])
 df_generalized_eval["eval_freq"] = freq_list
+df_generalized_eval["extinction_frac"] = extinction_frac_list
+df_generalized_eval["extinction_rate"] = extinction_rate_list
+
 
 # %% ----- ----- ----- ----- gen v.s. special ----- ----- ----- ----- %% #
 # df_constant_sim_cst_app
 # df_constant_eval
-
-df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
+    get_best_row_extinct_rate, include_groups=True
+).reset_index(drop=True)
+# df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_constant_eval_app = df_constant_eval_app.merge(df_constant_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_constant_eval_app["log_diff"] = df_constant_eval_app["sim_log_cell"] - df_constant_eval_app["eval_log_cell"]
 
 # df_varenv_sim_cst_app
 # df_varenv_eval
-
-df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False).apply(
+    get_best_row_extinct_rate, include_groups=True
+).reset_index(drop=True)
+# df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_varenv_eval_app = df_varenv_eval_app.merge(df_varenv_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_varenv_eval_app["log_diff"] = df_varenv_eval_app["sim_log_cell"] - df_varenv_eval_app["eval_log_cell"]
 
