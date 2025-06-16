@@ -234,10 +234,10 @@ class VariableNutrientEnv(BaseEnv):
 
             covmat_true_star = rbfkernel(t0,t[1:], self.ls,self.a)
             covmat_star_true = rbfkernel(t[1:],t0, self.ls,self.a)
-            mean_star = covmat_star_true * (self.k_n0 - self.k_n0_mean) + self.k_n0_mean
+            mean_star = covmat_star_true * (self.k_n0 - self.k_n0_mean) / self.a**2 + self.k_n0_mean
             covmat_star_star = rbfkernel(t[1:],t[1:], self.ls,self.a)
 
-            covmat = covmat_star_star - np.matmul(covmat_star_true, covmat_true_star)
+            covmat = covmat_star_star - np.matmul(covmat_star_true, covmat_true_star) / self.a**2
 
             k_n0_gp = np.random.multivariate_normal(mean_star.squeeze(), covmat, size=1)
             k_n0_list[1:] = np.clip(k_n0_gp[0], 0.1,10) + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
@@ -341,6 +341,6 @@ def is_range_inside(list_a, list_b):
     min_b, max_b = min(list_b), max(list_b)
     return min_a >= min_b and max_a <= max_b
 
-def rbfkernel(x1, x2, ls=4., a=1):
+def rbfkernel(x1, x2, ls, a):
     dist = distance_matrix(np.expand_dims(x1, 1), np.expand_dims(x2, 1))
-    return a * np.exp(-(1. / ls / 2) * (dist ** 2))
+    return a**2 * np.exp(-(1. / ls**2 / 2) * (dist ** 2))
