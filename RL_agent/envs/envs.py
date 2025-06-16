@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial import distance_matrix
 import copy
 import warnings
 from dataclasses import dataclass, field
@@ -37,6 +38,9 @@ class EnvConfig:
     k_n0_mean: Optional[Union[float, None]] = None # 2.55
     sigma_kn0: Optional[Union[float, None]] = None # 0.1
     hold_out_range_var: Optional[list] = None # list specifying interval of periods over which not be trained on, should fall within range of T_k_n0
+    noise_process: Optional[str] = "OU" # other option is GP
+    ls: Optional[float] = None # length-scale parameter for GP
+    a: Optional[float] = None # amplitude parameter for GP
 
     # control of nutrient environmental parameters
     k_n0_actions: Optional[list[float]] = field(default_factory=list)
@@ -187,16 +191,22 @@ class VariableNutrientEnv(BaseEnv):
     def __init__(self, env_config, cell_config = CellConfig()):
         super().__init__(env_config, cell_config)
         assert len(self.b_actions) == self.num_actions, "Number of actions must match number of antibiotic values"
-        assert env_config.T_k_n0 is not None, "T_k_n0 must be specified for variable nutrient environment"
         assert env_config.k_n0_mean is not None, "k_n0_mean must be specified for variable nutrient environment"
-        assert env_config.sigma_kn0 is not None, "sigma_kn0 must be specified for variable nutrient environment"
-
-        self.T_k_n0 = env_config.T_k_n0
+        self.noise_process = env_config.noise_process
         self.k_n0_mean = env_config.k_n0_mean
-        self.sigma_kn0 = env_config.sigma_kn0
-        self.tau = 3
-        self.Amp = 2
-        self.hold_out_range = env_config.hold_out_range_var
+
+        if self.noise_process is "OU":
+            assert env_config.T_k_n0 is not None, "T_k_n0 must be specified for variable nutrient environment"
+            assert env_config.sigma_kn0 is not None, "sigma_kn0 must be specified for variable nutrient environment"
+            self.T_k_n0 = env_config.T_k_n0
+            self.sigma_kn0 = env_config.sigma_kn0
+            self.hold_out_range = env_config.hold_out_range_var
+
+        if self.noise_process is "GP":
+            assert env_config.ls is not None, "Correlation length must be specified"
+            assert env_config.a is not None, "Amplitude must be specified"
+            self.ls = env_config.ls
+            self.a = env_config.a
 
     def dkn0dt(self, t, k_n0):
 
@@ -210,10 +220,28 @@ class VariableNutrientEnv(BaseEnv):
 
         k_n0_list = np.zeros(self.iterations)
         k_n0_list[0] = self.k_n0
-        for i in range(1, self.iterations):
-            k_n0_list[i] = k_n0_list[i-1] + self.dkn0dt(t[i-1], k_n0_list[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
-            k_n0_list[i] = np.clip(k_n0_list[i], 0.1, 5.0)
-        # k_n0_list = np.clip(k_n0_list, 0.1, 5.0) # clipping values to keep in physiological range
+
+        if self.noise_process == "OU":
+            self.tau = 3
+            self.Amp = 2
+            for i in range(1, self.iterations):
+                k_n0_list[i] = k_n0_list[i-1] + self.dkn0dt(t[i-1], k_n0_list[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
+                k_n0_list[i] = np.clip(k_n0_list[i], 0.1, 5.0) # clipping values to keep in physiological range
+
+        elif self.noise_process == "GP":
+            scale = 0.1
+            t0 = np.array([t[0]])
+
+            covmat_true_star = rbfkernel(t0,t[1:], self.ls,self.a)
+            covmat_star_true = rbfkernel(t[1:],t0, self.ls,self.a)
+            mean_star = covmat_star_true * (self.k_n0 - self.k_n0_mean) + self.k_n0_mean
+            covmat_star_star = rbfkernel(t[1:],t[1:], self.ls,self.a)
+
+            covmat = covmat_star_star - np.matmul(covmat_star_true, covmat_true_star)
+
+            k_n0_gp = np.random.multivariate_normal(mean_star.squeeze(), covmat, size=1)
+            k_n0_list[1:] = k_n0_gp[0] + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
+
         self.k_n0 = k_n0_list[-1]
 
         return k_n0_list
@@ -311,3 +339,7 @@ def is_range_inside(list_a, list_b):
     min_a, max_a = min(list_a), max(list_a)
     min_b, max_b = min(list_b), max(list_b)
     return min_a >= min_b and max_a <= max_b
+
+def rbfkernel(x1, x2, ls=4., a=1):
+    dist = distance_matrix(np.expand_dims(x1, 1), np.expand_dims(x2, 1))
+    return a * np.exp(-(1. / ls / 2) * (dist ** 2))
