@@ -195,14 +195,14 @@ class VariableNutrientEnv(BaseEnv):
         self.noise_process = env_config.noise_process
         self.k_n0_mean = env_config.k_n0_mean
 
-        if self.noise_process is "OU":
+        if self.noise_process == "OU":
             assert env_config.T_k_n0 is not None, "T_k_n0 must be specified for variable nutrient environment"
             assert env_config.sigma_kn0 is not None, "sigma_kn0 must be specified for variable nutrient environment"
             self.T_k_n0 = env_config.T_k_n0
             self.sigma_kn0 = env_config.sigma_kn0
             self.hold_out_range = env_config.hold_out_range_var
 
-        if self.noise_process is "GP":
+        elif self.noise_process == "GP":
             assert env_config.ls is not None, "Correlation length must be specified"
             assert env_config.a is not None, "Amplitude must be specified"
             self.ls = env_config.ls
@@ -240,37 +240,38 @@ class VariableNutrientEnv(BaseEnv):
             covmat = covmat_star_star - np.matmul(covmat_star_true, covmat_true_star)
 
             k_n0_gp = np.random.multivariate_normal(mean_star.squeeze(), covmat, size=1)
-            k_n0_list[1:] = k_n0_gp[0] + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
+            k_n0_list[1:] = np.clip(k_n0_gp[0], 0.1,10) + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
 
         self.k_n0 = k_n0_list[-1]
 
         return k_n0_list
 
     def reset(self) -> tuple:
-        # if self.k_n0_init != self.k_n0_mean:
-        #     warnings.warn("k_n0_init does not match k_n0_mean, changing k_n0_init to k_n0_mean.", category=UserWarning)
-        #     self.k_n0_init = self.k_n0_mean
-        if self.hold_out_range is not None:
-            assert is_range_inside(self.hold_out_range, self.T_k_n0), "Hold out range must be within range of time periods"
+        if self.noise_process == "OU":
+            if self.hold_out_range is not None:
+                assert is_range_inside(self.hold_out_range, self.T_k_n0), "Hold out range must be within range of time periods"
 
-            if np.random.rand() < (self.hold_out_range[0] - self.T_k_n0[0]) / (self.T_k_n0[1] - self.T_k_n0[0] - self.hold_out_range[1] + self.hold_out_range[0]):
-                self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.hold_out_range[0])
-            else:
-                self._T_k_n0 = np.random.uniform(self.hold_out_range[1], self.T_k_n0[1])
-        else:
-            if isinstance(self.T_k_n0, list):
-                if len(self.T_k_n0) == 1:
-                    self._T_k_n0 = self.T_k_n0[0]
-                elif len(self.T_k_n0) == 2:
-                    self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.T_k_n0[1])
+                if np.random.rand() < (self.hold_out_range[0] - self.T_k_n0[0]) / (self.T_k_n0[1] - self.T_k_n0[0] - self.hold_out_range[1] + self.hold_out_range[0]):
+                    self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.hold_out_range[0])
                 else:
-                    self._T_k_n0 = np.random.choice(self.T_k_n0)
+                    self._T_k_n0 = np.random.uniform(self.hold_out_range[1], self.T_k_n0[1])
             else:
-                self._T_k_n0 = self.T_k_n0
+                if isinstance(self.T_k_n0, list):
+                    if len(self.T_k_n0) == 1:
+                        self._T_k_n0 = self.T_k_n0[0]
+                    elif len(self.T_k_n0) == 2:
+                        self._T_k_n0 = np.random.uniform(self.T_k_n0[0], self.T_k_n0[1])
+                    else:
+                        self._T_k_n0 = np.random.choice(self.T_k_n0)
+                else:
+                    self._T_k_n0 = self.T_k_n0
 
-        self.phase = np.random.uniform(0, self._T_k_n0)
-        self.k_n0 = self.Amp*np.sin(self.phase) + self.k_n0_mean + np.random.normal(scale=0.5)
-        self.k_n0_init = self.k_n0
+            self.phase = np.random.uniform(0, self._T_k_n0)
+            self.k_n0 = self.Amp*np.sin(self.phase) + self.k_n0_mean + np.random.normal(scale=0.5)
+            self.k_n0_init = self.k_n0
+
+        elif self.noise_process == "GP":
+            self.k_n0 = np.random.normal(self.k_n0_mean)
 
         self._reset()
         for _ in range(self.warm_up):
