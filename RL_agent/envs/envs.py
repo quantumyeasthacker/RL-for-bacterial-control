@@ -240,7 +240,8 @@ class VariableNutrientEnv(BaseEnv):
             covmat = covmat_star_star - np.matmul(covmat_star_true, covmat_true_star) / self.a**2
 
             k_n0_gp = np.random.multivariate_normal(mean_star.squeeze(), covmat, size=1)
-            k_n0_list[1:] = np.clip(k_n0_gp[0], 0.1,10) + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
+            k_n0_list[1:] = k_n0_gp[0] + np.random.normal(scale=scale, size=len(k_n0_gp[0]))
+            k_n0_list = np.clip(k_n0_list, 0.1,10)
 
         self.k_n0 = k_n0_list[-1]
 
