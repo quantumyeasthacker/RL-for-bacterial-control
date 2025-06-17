@@ -335,7 +335,7 @@ def plot_single_separate(
     for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
         ax.plot(tcbk_list[j][0], tcbk_list[j][1], color='gray', alpha=0.3, linewidth=1)
     ax.plot(t, tcbk_list[max_id][1], color=POP_SIZE_COLOR, linewidth=4)
-    ax.axvline(x=t[warm_up_embed], linestyle='--', color='k')
+    ax.axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
     ax.set_ylabel(r'$P$', fontdict={'fontsize': 16})
     ax.set_xlabel('Time (h)', fontdict={'fontsize': 16})
     plt.xticks(fontsize=14)
@@ -343,3 +343,51 @@ def plot_single_separate(
     ax.set_yscale('log')
     figure.savefig(f"{out_name_base}_pop.{out_name_type}", dpi=300, bbox_inches='tight')
     plt.close(figure)
+
+
+def plot_one_traj(
+        loaded_logger,
+        out_name,
+        line_color_list = None,
+        n_trials = 100,
+        warm_up_embed = 61,
+):
+    # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
+    tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
+    # cell_ave = np.mean(cell_array, axis=0)
+    out_path = os.path.dirname(out_name)
+    # out_basename = os.path.basename(out_name).split(".")[0]
+
+    out_name_type = str(out_name).split(".")[-1]
+    out_name_base = str(out_name).split(f".{out_name_type}")[0]
+
+    for choice in range(n_trials):
+        figure, ax = plt.subplots(3,1)
+        figure.subplots_adjust(hspace=.0)
+        ax_num = 0
+        ax[ax_num].plot(tcbk_list[choice][0], tcbk_list[choice][2], color=line_color_list[0])
+        ax[ax_num].set_ylabel('Antibiotic')
+        ax[ax_num].get_xaxis().set_ticks([])
+        ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
+        ax[ax_num].axvline(x=72, color='white')
+
+        ax_num += 1
+        ax[ax_num].plot(tcbk_list[choice][0], tcbk_list[choice][3], color=line_color_list[1])
+        ax[ax_num].set_ylabel('Nutrient')
+        ax[ax_num].get_xaxis().set_ticks([])
+        ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
+        ax[ax_num].axvline(x=72, color='white')
+
+        ax_num += 1
+        ax[ax_num].plot(tcbk_list[choice][0], tcbk_list[choice][1], color=line_color_list[2])
+        ax[ax_num].set_ylabel(r'$P$')
+        ax[ax_num].set_xlabel('Time (h)')
+        ax[ax_num].set_yscale('log')
+        ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
+        ax[ax_num].axvline(x=72, color='white')
+
+        out_path = os.path.dirname(out_name)
+        os.makedirs(out_path, exist_ok=True)
+
+        figure.savefig(out_name_base + f"_{choice}." + out_name_type, dpi=300, bbox_inches='tight')
+        plt.close(figure)
