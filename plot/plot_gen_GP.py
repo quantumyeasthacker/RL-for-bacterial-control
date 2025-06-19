@@ -32,7 +32,6 @@ max_pop: int = int(1e11)
 # %% ----- ----- ----- ----- sim ----- ----- ----- ----- %% #
 param_file = BASE_PATH / f"param_simtest_GP.txt"
 sim_folder = BASE_PATH / f"results_generalized_simtest"
-# sim_folder = BASE_PATH / "20250309_constant_app" / sim_folder
 
 n_trials = 50
 
@@ -141,7 +140,6 @@ for param in param_agent:
 
 df_generalized_eval["eval_log_cell"] = eval_cell_list
 df_generalized_eval["eval_log_cell_std"] = eval_cell_std_list
-# df_generalized_eval["eval_log_cell"] = np.log10(df_generalized_eval["eval_final_cell"])
 df_generalized_eval["eval_freq"] = freq_list
 
 # %% ----- ----- ----- ----- gen v.s. sim ----- ----- ----- ----- %% #
@@ -164,12 +162,9 @@ df1 = df_generalized_eval_app[["inst_combination", "log_diff", "eval_log_cell_st
 df1["source"] = "Generalized Agents " + df1["inst_combination"]
 # df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
 # COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-# df2 = df_eval_app[["inst_combination", "log_diff", "eval_log_cell_std"]].copy()
-# df2["color"] = "#17becf"
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-# combined_df = pd.concat([df1, df2])
 combined_df = df1
 combined_df.rename(columns={'eval_log_cell_std': 'std'}, inplace=True)
 combined_df = combined_df.drop_duplicates(subset='source') ##### temporary due to repeating analysis
@@ -184,8 +179,6 @@ sns.barplot(
     capsize=0.1
 )
 ax.axhline(0, color='gray', linewidth=1, linestyle='--')
-# for container in ax.containers:
-#     ax.bar_label(container, fmt='%.2f', padding=3)
 for patch in ax.patches:
     patch.set_edgecolor('black')
     patch.set_linewidth(1)
@@ -193,16 +186,14 @@ for patch in ax.patches:
 
 ax.set_title('Generalized Agent Performance in Different GP Nutrient Environments')
 ax.set_xlabel('Evaluation Environment')
-# ax.set_ylabel(r'$\Delta \log(population\ size)$')
 ax.set_ylabel(r'$\log(P_{constant})-\log(P_{pulsing})$')
-# ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
 ax.legend_.remove()
 plt.xticks(rotation=45)
 fig.tight_layout()
 
 Fig_PATH = BASE_PATH / "figures_pdf"
 os.makedirs(Fig_PATH, exist_ok=True)
-# fig.savefig(BASE_PATH / "figures_pdf" / "Generalized_bar_GP.pdf", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / "Generalized_bar_GP.pdf", dpi=600, bbox_inches='tight')
 
 
 # %% ----- ----- ----- ----- plot individual trajectories ----- ----- ----- ----- %% #
