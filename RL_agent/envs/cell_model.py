@@ -11,6 +11,7 @@ class CellConfig:
     a_t: float = 1e-4 # amino acid level for efficient peptide elongation, Scott et al. 2014
     n_f: int = 2 # cooperativity in feedback
     n_g: int = 2
+    mutate: bool = False # if True, phiS_max and phiR_max can change at division
 
     # Kratz and Banerjee 2023
     sigma: float = 0.015 # noise strength
@@ -26,11 +27,12 @@ class CellConfig:
 
 
 class Cell_Population(object):
-    def __init__(self, cell_config):        
+    def __init__(self, cell_config):
         self.true_num_cells = None
         self.populations = None
         self.guess_value_list = None
         self._log = None
+        self.mutate = cell_config.mutate
 
         # cell parameters
         self.cell_config = cell_config
@@ -64,14 +66,14 @@ class Cell_Population(object):
         return (self.n_g/self.a_t)*(a/self.a_t)**(self.n_g-1) / (1 + (a/self.a_t)**self.n_g)**2 # derivative of g w.r.t. a
 
     # f_S, fraction of total cell synthesis capcity devoted to stress protein production
-    def f_S(self, U):
-        return self.phiS_max * (U**self.q / (self.K_u**self.q + U**self.q))
+    def f_S(self, U, phiS_max):
+        return phiS_max * (U**self.q / (self.K_u**self.q + U**self.q))
     # f_R, fraction of total cell synthesis capacity devoted to ribosome production
-    def f_R(self, a, U):
-        return (-self.f_prime(a)*self.g(a)*(self.phiR_max-self.f_S(U)) + self.f(a)*self.g_prime(a)*self.phiR_min) / (-self.f_prime(a)*self.g(a) + self.f(a)*self.g_prime(a))
+    def f_R(self, a, U, phiR_max, phiS_max):
+        return (-self.f_prime(a)*self.g(a)*(phiR_max-self.f_S(U,phiS_max)) + self.f(a)*self.g_prime(a)*self.phiR_min) / (-self.f_prime(a)*self.g(a) + self.f(a)*self.g_prime(a))
     # f_X, fraction of cell synthesis capacity devoted to division protein production
-    def f_X(self, a, U):
-        return self.alphaX*(self.phiR_max - self.f_R(a,U)) + self.betaX
+    def f_X(self, a, U, phiR_max, phiS_max):
+        return self.alphaX*(phiR_max - self.f_R(a,U,phiR_max,phiS_max)) + self.betaX
 
     def U_t(self, U):
         ut = 1 - U
@@ -84,53 +86,53 @@ class Cell_Population(object):
         k = k_t * (phi_R - self.phiR_min)
         return k
 
-    def dphiR_dt(self, phi_R, a, U):
+    def dphiR_dt(self, phi_R, a, U, phiR_max, phiS_max):
         # ribosome mass fraction ODE
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
-        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_R(a,U) - phi_R)
+        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_R(a,U,phiR_max,phiS_max) - phi_R)
         return dpdt
 
-    def dphiS_dt(self, phi_S, a, phi_R, U):
+    def dphiS_dt(self, phi_S, a, phi_R, U, phiS_max):
         # stress sector mass fraction ODE
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
-        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_S(U) - phi_S)
+        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_S(U,phiS_max) - phi_S)
         return dpdt
 
-    def dAAdt(self, a, phi_R, phi_S, U, k_n0):
+    def dAAdt(self, a, phi_R, phi_S, U, k_n0, phiR_max):
         # amino acid concentration ODE (variable nutrient conc.(c))
         k_n = k_n0 * self.f(a) # nutritional efficiency, depends on concentration of nutrients outside cell
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
 
-        dadt = k_n * (self.phiR_max - phi_R - phi_S) - k_t * (phi_R - self.phiR_min)
+        dadt = k_n * (phiR_max - phi_R - phi_S) - k_t * (phi_R - self.phiR_min)
         return dadt
 
     def dUdt(self, U, phi_S, phi_R, a, b):
         # damage concentration ODE
         return self.alpha*phi_R*b - self.beta*phi_S*U - U*self.GrowthRate(a, phi_R, U)
 
-    def dXdt(self, X, a, phi_R, V, U):
+    def dXdt(self, X, a, phi_R, V, U, phiR_max, phiS_max):
         # division protein ODE
-        dxdt = self.f_X(a,U) * self.GrowthRate(a, phi_R, U) * V - self.mu * X
+        dxdt = self.f_X(a,U,phiR_max,phiS_max) * self.GrowthRate(a, phi_R, U) * V - self.mu * X
         return dxdt
 
     def dVdt(self, V, a, phi_R, U):
         # cell volume ODE
         dvdt = self.GrowthRate(a, phi_R, U) * V
         return dvdt
-    
+
     # initialize simulation
-    def phiR_ss(self, a, U, k_n0):
+    def phiR_ss(self, a, U, k_n0, phiR_max, phiS_max):
         # function for phi_R at steady state
         k_n = k_n0 * self.f(a) # nutritional efficiency, depends on concentration of nutrients outside cell
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
-        return (k_n*(self.phiR_max-self.f_S(U)) + k_t*self.phiR_min) / (k_n + k_t)
-    
-    def func(self, x, k_n0, b):
+        return (k_n*(phiR_max-self.f_S(U,phiS_max)) + k_t*self.phiR_min) / (k_n + k_t)
+
+    def func(self, x, k_n0, b, phiR_max, phiS_max):
         # function for calculating steady state conditions for given parameters
-        return [self.phiR_ss(x[0],x[2],k_n0) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
-                self.f_R(x[0],x[2]) - x[1],
-                self.beta*x[2]*self.f_S(x[2]) - self.alpha*x[1]*b]
-    
+        return [self.phiR_ss(x[0],x[2],k_n0,phiR_max,phiS_max) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
+                self.f_R(x[0],x[2],phiR_max,phiS_max) - x[1],
+                self.beta*x[2]*self.f_S(x[2],phiS_max) - self.alpha*x[1]*b]
+
     def initialize(self, num_cells_init, k_n0, b):
         self._log = []
         # self.k_n0 = np.random.normal(loc=self.k_n0_mean, scale=0.2*self.k_n0_mean)
@@ -144,34 +146,35 @@ class Cell_Population(object):
         phiS_birth = np.ones((num_cells_init))*phi_S0
         a_birth = np.ones((num_cells_init))*a0
         U_birth = np.ones((num_cells_init))*U0
+
+        phiRmax_birth = np.ones((num_cells_init))*self.phiR_max
+        phiSmax_birth = np.ones((num_cells_init))*self.phiS_max
+
         # assigning random initial cell volume, in um^3
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
 
         start_t_stack = np.random.randint(int(cycle_t), int(cycle_t*100) + 1, (num_cells_init))/100
-        birth_size = 1 / self.f_X(a0, U0) # average cell size at birth at initial steady-state growth
+        birth_size = 1 / self.f_X(a0, U0, self.phiR_max, self.phiS_max) # average cell size at birth at initial steady-state growth
         V_birth = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t_stack)
-        X_birth = self.f_X(a0,U0) * V_birth * 0.5
+        X_birth = self.f_X(a0,U0,self.phiR_max,self.phiS_max) * V_birth * 0.5
 
         self._t = 0
         self._log.append([self._t, k_n0, b, num_cells_init, U0, phi_R0, phi_S0])
-        self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth), axis=0)
+        self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth, phiRmax_birth, phiSmax_birth), axis=0)
 
     def _guess_init_values(self, k_n0, b):
         while True:
             if self.guess_value_list is not None:
                 guess_value_list = self.guess_value_list
-                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b))
+                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiR_max, self.phiS_max))
             else:
-                # 1e-5 to 1e-4
-                # 0.2 to 0.5
-                # 1e-4 to 1e-2
                 value1 = np.random.uniform(1e-5, 1e-4)
                 value2 = np.random.uniform(0.2, 0.5)
                 value3 = np.random.uniform(1e-4, 1e-2)
                 guess_value_list = [value1, value2, value3]
-                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b)) # requires guess of initial conditions
+                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiR_max, self.phiS_max)) # requires guess of initial conditions
 
-            phi_S0 = self.f_S(U0)
+            phi_S0 = self.f_S(U0,self.phiS_max)
             ls = [a0, phi_R0, U0, phi_S0]
             if all(val >= 0 for val in ls):
                 self.guess_value_list = guess_value_list
@@ -183,15 +186,15 @@ class Cell_Population(object):
                 print(ls)
                 print("Initial values are unphysical, changing guess of initial conditions")
         return ls
-        
+
     # simulatation implementation
     def MultiIntegrate(self, Species, dt, b, k_n0):
         # numerically solve via Euler-Maruyama method
-        phiR_i,phiS_i,a_i,U_i,X_i,V_i = Species
+        phiR_i,phiS_i,a_i,U_i,X_i,V_i,phiRmax_i,phiSmax_i = Species
 
-        phi_R = phiR_i + self.dphiR_dt(phiR_i, a_i, U_i)*dt
-        phi_S = phiS_i + self.dphiS_dt(phiS_i, a_i, phiR_i, U_i)*dt
-        a = a_i + self.dAAdt(a_i, phiR_i, phiS_i, U_i, k_n0)*dt
+        phi_R = phiR_i + self.dphiR_dt(phiR_i, a_i, U_i, phiRmax_i, phiSmax_i)*dt
+        phi_S = phiS_i + self.dphiS_dt(phiS_i, a_i, phiR_i, U_i, phiSmax_i)*dt
+        a = a_i + self.dAAdt(a_i, phiR_i, phiS_i, U_i, k_n0, phiRmax_i)*dt
         # ensure that amino acid conc. is not negative
         a[a < 1e-7] = 1e-7
         # if a < 1e-7:
@@ -205,13 +208,11 @@ class Cell_Population(object):
         if b == 0:
             U[...] = 0
         U[U < 0] = 0
-        # if U < 0 or b == 0:
-        #     U = 0
 
-        X = X_i + self.dXdt(X_i, a_i, phiR_i, V_i, U_i)*dt
+        X = X_i + self.dXdt(X_i, a_i, phiR_i, V_i, U_i, phiRmax_i, phiSmax_i)*dt
         V = V_i + self.dVdt(V_i, a_i, phiR_i, U_i)*dt
 
-        return np.stack((phi_R, phi_S, a, U, X, V), axis=0)
+        return np.stack((phi_R, phi_S, a, U, X, V, phiRmax_i, phiSmax_i), axis=0)
 
     def _cell_population_truncate(self, threshold):
         num_entity = self.populations.shape[0]
@@ -231,7 +232,7 @@ class Cell_Population(object):
             population_new = np.random.normal(size=(num_entity,num_cells_add))
             population_new = population_new * self.populations.std(axis=-1, keepdims=True) \
                 + self.populations.mean(axis=-1, keepdims=True)
-            
+
             population_new = population_new.clip(0, 0.99)
             population_new[0] = population_new[0].clip(self.phiR_min, self.phiR_max)
             population_new[1] = population_new[1].clip(None, self.phiS_max)
@@ -243,19 +244,19 @@ class Cell_Population(object):
             num_cells = num_cells_saved
 
         return num_cells
-    
+
     def simulate_population(self, k_n0_list, b, delta_t, n_steps=3000, threshold=50):
         if np.isnan(self.populations).any() or (self.populations < 0).any(): # checking to make sure nan values are not present
             # print('populations:', self.populations)
             raise ValueError(f'Simulation error, nan or negative values present')
-        
+
         num_cells = self._cell_population_truncate(threshold)
         # unpacking initial conditions for each cell trajectory
 
         iterations = int(delta_t * n_steps)
         dt = 1 / n_steps
         cell_count = [num_cells]
-        
+
         species_stack = self.populations
         for i in range(iterations):
             species_stack = self.MultiIntegrate(species_stack, dt, b, k_n0_list[i]) # integrating one timestep
@@ -269,6 +270,13 @@ class Cell_Population(object):
                 X_stack_children = species_stack[:,birth_check].copy()
                 X_stack_children[4] = 0
                 X_stack_children[5] = X_stack_children[5] * (1 - r)
+
+                if self.mutate:
+                    covmat = np.diag(np.ones(birth_check.sum())*0.1) # set the std of deviation from parent
+                    phiRmax_children = np.random.multivariate_normal(X_stack_children[6],covmat)
+                    X_stack_children[6] = np.clip(phiRmax_children,self.phiR_min,self.phiR_max*1.3)
+                    phiSmax_children = np.random.multivariate_normal(X_stack_children[7],covmat)
+                    X_stack_children[7] = np.clip(phiSmax_children,0,self.phiS_max*1.3)
 
                 species_stack[4,birth_check] = 0
                 species_stack[5,birth_check] = species_stack[5,birth_check] * r
