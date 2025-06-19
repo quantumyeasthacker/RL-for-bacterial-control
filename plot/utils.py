@@ -202,16 +202,21 @@ def plot_single_varenv(
         loaded_logger,
         out_name,
         line_color_list = None,
-        n_trials = 100
+        n_trials = 100,
+        choices = None,
 ):
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
     tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
     # cell_ave = np.mean(cell_array, axis=0)
     
-    np.random.seed(1)
-    choices = np.random.choice(n_trials, 3)
+    if choices is None:
+        # Randomly choose 3 trials from the available ones
+        # np.random.seed(1)
+        # choices = np.random.choice(n_trials, 3, replace=False)
+        np.random.seed(1)
+        choices = np.random.choice(n_trials, 3)
 
-    figure, ax = plt.subplots(5,1)
+    figure, ax = plt.subplots(3,1)
     figure.subplots_adjust(hspace=.0)
     ax_num = 0
     # ax[0].set_title(f"antibiotic conc. max = {antibiotic_value}, nutrient conc. = {nutrient_value}")
@@ -219,31 +224,34 @@ def plot_single_varenv(
         ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
     ax[ax_num].set_ylabel('Antibiotic')
     ax[ax_num].get_xaxis().set_ticks([])
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    ax[ax_num].axvline(x=72, color='white')
 
     ax_num += 1
     for i_c, j in enumerate(choices):  # Choose a subset (e.g., 20 out of 100) for shadow effect
         ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
     ax[ax_num].set_ylabel('Nutrient')
     ax[ax_num].get_xaxis().set_ticks([])
-    # ax[ax_num].axvline(x=delta_t*embed_len, linestyle='--', color='k')
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    ax[ax_num].axvline(x=72, color='white')
 
-    ax_num += 1
-    for i_c, j in enumerate(choices):
-        ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color=line_color_list[i_c])
-    ax[ax_num].set_ylabel(r'$\phi_R$')
-    ax[ax_num].set_ylim(bottom=-0.1, top=0.45)
-    # ax[ax_num].set_xlabel('Time (h)')
-    ax[ax_num].get_xaxis().set_ticks([])
-    # ax[ax_num].set_yscale('log')
+    # ax_num += 1
+    # for i_c, j in enumerate(choices):
+    #     ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color=line_color_list[i_c])
+    # ax[ax_num].set_ylabel(r'$\phi_R$')
+    # ax[ax_num].set_ylim(bottom=-0.1, top=0.45)
+    # # ax[ax_num].set_xlabel('Time (h)')
+    # ax[ax_num].get_xaxis().set_ticks([])
+    # # ax[ax_num].set_yscale('log')
 
-    ax_num += 1
-    for i_c, j in enumerate(choices):
-        ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color=line_color_list[i_c])
-    ax[ax_num].set_ylabel(r'$\phi_S$')
-    ax[ax_num].set_ylim(bottom=-0.1, top=0.35)
-    # ax[ax_num].set_xlabel('Time (h)')
-    ax[ax_num].get_xaxis().set_ticks([])
-    # ax[ax_num].set_yscale('log')
+    # ax_num += 1
+    # for i_c, j in enumerate(choices):
+    #     ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color=line_color_list[i_c])
+    # ax[ax_num].set_ylabel(r'$\phi_S$')
+    # ax[ax_num].set_ylim(bottom=-0.1, top=0.35)
+    # # ax[ax_num].set_xlabel('Time (h)')
+    # ax[ax_num].get_xaxis().set_ticks([])
+    # # ax[ax_num].set_yscale('log')
 
     ax_num += 1
     for i_c, j in enumerate(choices):
@@ -251,6 +259,8 @@ def plot_single_varenv(
     ax[ax_num].set_ylabel(r'$P$')
     ax[ax_num].set_xlabel('Time (h)')
     ax[ax_num].set_yscale('log')
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    ax[ax_num].axvline(x=72, color='white')
 
     # out_path = "figures/a%.2f_n%.2f_value_check/"%(antibiotic_value, nutrient_value)
     # extract path from out_name
@@ -369,14 +379,14 @@ def plot_one_traj(
         ax[ax_num].set_ylabel('Antibiotic')
         ax[ax_num].get_xaxis().set_ticks([])
         ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
-        ax[ax_num].axvline(x=72, color='white')
+        # ax[ax_num].axvline(x=72, color='white')
 
         ax_num += 1
         ax[ax_num].plot(tcbk_list[choice][0], tcbk_list[choice][3], color=line_color_list[1])
         ax[ax_num].set_ylabel('Nutrient')
         ax[ax_num].get_xaxis().set_ticks([])
         ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
-        ax[ax_num].axvline(x=72, color='white')
+        # ax[ax_num].axvline(x=72, color='white')
 
         ax_num += 1
         ax[ax_num].plot(tcbk_list[choice][0], tcbk_list[choice][1], color=line_color_list[2])
@@ -384,7 +394,7 @@ def plot_one_traj(
         ax[ax_num].set_xlabel('Time (h)')
         ax[ax_num].set_yscale('log')
         ax[ax_num].axvline(x=t[warm_up_embed-1], linestyle='--', color='k')
-        ax[ax_num].axvline(x=72, color='white')
+        # ax[ax_num].axvline(x=72, color='white')
 
         out_path = os.path.dirname(out_name)
         os.makedirs(out_path, exist_ok=True)

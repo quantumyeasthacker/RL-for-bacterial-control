@@ -71,13 +71,29 @@ for param in param_sim:
     
     loaded_logger = load_logger_data_new(folder_name, sim_length, max_pop, n_trials)
 
-    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check" / f"{manual_protocol}.jpg"
-    # plot_single_varenv(loaded_logger, out_name, color_list, n_trials)
-    plot_one_traj(loaded_logger, out_name, color_list, n_trials, warm_up_embed)
+    # out_name = BASE_PATH / "figures_jpg" / "control_nutr_short" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check" / f"{manual_protocol}.jpg"
+    # # plot_single_varenv(loaded_logger, out_name, color_list, n_trials)
+    # plot_one_traj(loaded_logger, out_name, color_list, n_trials, warm_up_embed)
 
-    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check" / f"{manual_protocol}.pdf"
-    # plot_single_varenv(loaded_logger, out_name, color_list, n_trials)
-    plot_one_traj(loaded_logger, out_name, color_list, n_trials, warm_up_embed)
+    # out_name = BASE_PATH / "figures_pdf" / "control_nutr_short" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check" / f"{manual_protocol}.pdf"
+    # # plot_single_varenv(loaded_logger, out_name, color_list, n_trials)
+    # plot_one_traj(loaded_logger, out_name, color_list, n_trials, warm_up_embed)
+
+    if manual_protocol == "Famine":
+        choice_list = [0, 6, 19]
+        line_color_list = ["purple"]*3
+    elif manual_protocol == "Feast":
+        choice_list = [1, 2]
+        line_color_list = ["slateblue"]*2
+
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.jpg"
+    plot_single_varenv(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    )
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.pdf"
+    plot_single_varenv(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    )
 
     tcbk_list, _, _, _, cell_array, _ = loaded_logger
 
@@ -161,13 +177,26 @@ for param in param_agent:
     
     loaded_logger = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval)
 
-    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / trial_name / f"{training_episode}" / "traj.jpg"
-    # plot_single_varenv(loaded_logger, out_name, color_list, n_trials_eval)
-    plot_one_traj(loaded_logger, out_name, color_list, n_trials_eval, warm_up_embed)
+    # out_name = BASE_PATH / "figures_jpg" / "control_nutr_short" / trial_name / f"{training_episode}" / "traj.jpg"
+    # # plot_single_varenv(loaded_logger, out_name, color_list, n_trials_eval)
+    # plot_one_traj(loaded_logger, out_name, color_list, n_trials_eval, warm_up_embed)
 
-    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / trial_name / f"{training_episode}" / "traj.pdf"
-    # plot_single_varenv(loaded_logger, out_name, color_list, n_trials_eval)
-    plot_one_traj(loaded_logger, out_name, color_list, n_trials_eval, warm_up_embed)
+    # out_name = BASE_PATH / "figures_pdf" / "control_nutr_short" / trial_name / f"{training_episode}" / "traj.pdf"
+    # # plot_single_varenv(loaded_logger, out_name, color_list, n_trials_eval)
+    # plot_one_traj(loaded_logger, out_name, color_list, n_trials_eval, warm_up_embed)
+
+    choice_list = [17, 18, 41]
+    line_color_list = ["seagreen"]*3
+    
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"{trial_name}_{training_episode}_traj.jpg"
+    plot_single_varenv(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    )
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"{trial_name}_{training_episode}_traj.pdf"
+    plot_single_varenv(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    )
+
 
     tcbk_list, _, _, _, cell_array, _ = loaded_logger
     extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
@@ -218,32 +247,35 @@ df_control_eval["bootstrap_std"] = bootstrap_std_list
 
 # %%
 plt.rcParams.update({"font.size": 14})
-fig = plt.figure()
+fig, ax = plt.subplots()
 
 condition_labels = ['Feast', 'Famine', 'Learned Policy']
-plt.bar(
+plt.barh(
     condition_labels[0],
     df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[0], "bootstrap_mean"].item(),
-    yerr=df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[0], "bootstrap_std"].item(),
+    xerr=df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[0], "bootstrap_std"].item(),
     capsize=5, color='slateblue', edgecolor='slateblue',
 )
-plt.bar(
+plt.barh(
     condition_labels[1],
     df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[1], "bootstrap_mean"].item(),
-    yerr=df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[1], "bootstrap_std"].item(),
+    xerr=df_control_sim.loc[df_control_sim["manual_protocol"] == condition_labels[1], "bootstrap_std"].item(),
     capsize=5, color='purple', edgecolor='purple',
 )
-plt.bar(
+plt.barh(
     condition_labels[2],
     df_control_eval["bootstrap_mean"],
-    yerr=df_control_eval["bootstrap_std"],
+    xerr=df_control_eval["bootstrap_std"],
     capsize=5, color='seagreen', edgecolor='seagreen',
 )
 plt.ylabel('Extinction Fraction')
+ax.yaxis.tick_right()
+# ax.yaxis.set_label_position("right")
+ax.invert_yaxis()
 plt.show()
 
-fig.savefig('/home/zihangw/BacteriaAdaptation/figures_jpg/control_env_comparison.jpg', dpi=300, bbox_inches='tight')
-fig.savefig('/home/zihangw/BacteriaAdaptation/figures_pdf/control_env_comparison.pdf', dpi=300, bbox_inches='tight')
+fig.savefig('/home/zihangw/BacteriaAdaptation/figures_jpg/control_env_comparison_h.jpg', dpi=300, bbox_inches='tight')
+fig.savefig('/home/zihangw/BacteriaAdaptation/figures_pdf/control_env_comparison_h.pdf', dpi=300, bbox_inches='tight')
 
 # %%
 # fff_name = "/home/zihangw/BacteriaAdaptation/plot/run_one_control/results_sim_controlenv/a3.72_n1_3_value_check/Famine/"
