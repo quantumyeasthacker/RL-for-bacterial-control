@@ -7,7 +7,7 @@ import pickle
 import seaborn as sns
 # from scipy.optimize import curve_fit
 import matplotlib as mpl
-from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate, plot_single_varenv, plot_one_traj
+from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate, plot_single_varenv, plot_one_traj, plot_single_trunc
 from pathlib import Path
 
 
@@ -86,12 +86,12 @@ for param in param_sim:
         choice_list = [1, 2]
         line_color_list = ["slateblue"]*2
 
-    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.jpg"
-    plot_single_varenv(
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr_trunc" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.jpg"
+    plot_single_trunc(
         loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
     )
-    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.pdf"
-    plot_single_varenv(
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr_trunc" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.pdf"
+    plot_single_trunc(
         loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
     )
 
@@ -190,11 +190,11 @@ for param in param_agent:
     
     out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"{trial_name}_{training_episode}_traj.jpg"
     plot_single_varenv(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list
     )
     out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"{trial_name}_{training_episode}_traj.pdf"
     plot_single_varenv(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list
     )
 
 

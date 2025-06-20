@@ -3,6 +3,8 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 from scipy import signal
+from brokenaxes import brokenaxes
+from matplotlib.gridspec import GridSpec
 
 
 # default_color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -216,7 +218,7 @@ def plot_single_varenv(
         np.random.seed(1)
         choices = np.random.choice(n_trials, 3)
 
-    figure, ax = plt.subplots(3,1)
+    figure, ax = plt.subplots(3,1,figsize=(6.4, 4.8))
     figure.subplots_adjust(hspace=.0)
     ax_num = 0
     # ax[0].set_title(f"antibiotic conc. max = {antibiotic_value}, nutrient conc. = {nutrient_value}")
@@ -225,7 +227,7 @@ def plot_single_varenv(
     ax[ax_num].set_ylabel('Antibiotic')
     ax[ax_num].get_xaxis().set_ticks([])
     ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
-    ax[ax_num].axvline(x=72, color='white')
+    # ax[ax_num].axvline(x=72, color='white')
 
     ax_num += 1
     for i_c, j in enumerate(choices):  # Choose a subset (e.g., 20 out of 100) for shadow effect
@@ -233,7 +235,7 @@ def plot_single_varenv(
     ax[ax_num].set_ylabel('Nutrient')
     ax[ax_num].get_xaxis().set_ticks([])
     ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
-    ax[ax_num].axvline(x=72, color='white')
+    # ax[ax_num].axvline(x=72, color='white')
 
     # ax_num += 1
     # for i_c, j in enumerate(choices):
@@ -260,7 +262,7 @@ def plot_single_varenv(
     ax[ax_num].set_xlabel('Time (h)')
     ax[ax_num].set_yscale('log')
     ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
-    ax[ax_num].axvline(x=72, color='white')
+    # ax[ax_num].axvline(x=72, color='white')
 
     # out_path = "figures/a%.2f_n%.2f_value_check/"%(antibiotic_value, nutrient_value)
     # extract path from out_name
@@ -401,3 +403,54 @@ def plot_one_traj(
 
         figure.savefig(out_name_base + f"_{choice}." + out_name_type, dpi=300, bbox_inches='tight')
         plt.close(figure)
+
+
+def plot_single_trunc(
+        loaded_logger,
+        out_name,
+        line_color_list = None,
+        n_trials = 100,
+        choices = None,
+):
+    tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
+    
+    if choices is None:
+        np.random.seed(1)
+        choices = np.random.choice(n_trials, 3)
+
+    figure = plt.figure(figsize=(6.4, 4.8))
+    sps1, sps2, sps3 = GridSpec(3,1)
+    figure.subplots_adjust(hspace=.0)
+
+    # figure, ax = plt.subplots(3,1,figsize=([6.4, 4.8]))
+    # figure.subplots_adjust(hspace=.0)
+    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps1)
+    for i_c, j in enumerate(choices):
+        bax.plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
+    bax.set_ylabel('Antibiotic')
+    bax.axvline(x=t[61-1], linestyle='--', color='k')
+    for ax in bax.axs:  # bax.axs is a 2D array of Axes
+        ax.get_xaxis().set_ticks([])
+    # ax[ax_num].axvline(x=72, color='white')
+
+    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps2)
+    for i_c, j in enumerate(choices):  # Choose a subset (e.g., 20 out of 100) for shadow effect
+        bax.plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
+    bax.set_ylabel('Nutrient')
+    bax.axvline(x=t[61-1], linestyle='--', color='k')
+    for ax in bax.axs:  # bax.axs is a 2D array of Axes
+        ax.get_xaxis().set_ticks([])
+
+    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps3)
+    for i_c, j in enumerate(choices):
+        bax.plot(tcbk_list[j][0], tcbk_list[j][1], color=line_color_list[i_c])
+    bax.set_ylabel(r'$P$')
+    bax.set_xlabel('Time (h)')
+    bax.set_yscale('log')
+    bax.axvline(x=t[61-1], linestyle='--', color='k')
+
+    out_path = os.path.dirname(out_name)
+    os.makedirs(out_path, exist_ok=True)
+
+    figure.savefig(out_name, dpi=300, bbox_inches='tight')
+    plt.close(figure)
