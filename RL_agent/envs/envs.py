@@ -202,6 +202,9 @@ class VariableNutrientEnv(BaseEnv):
             self.sigma_kn0 = env_config.sigma_kn0
             self.hold_out_range = env_config.hold_out_range_var
 
+            self.tau = 3
+            self.Amp = 2
+
         elif self.noise_process == "GP":
             assert env_config.ls is not None, "Correlation length must be specified"
             assert env_config.a is not None, "Amplitude must be specified"
@@ -209,7 +212,6 @@ class VariableNutrientEnv(BaseEnv):
             self.a = env_config.a
 
     def dkn0dt(self, t, k_n0):
-
         drift = self.Amp*np.sin(t*2*np.pi/self._T_k_n0 + self.phase) + self.k_n0_mean
         dkdt = -(1/self.tau)*(k_n0 - drift)
         return dkdt
@@ -222,8 +224,6 @@ class VariableNutrientEnv(BaseEnv):
         k_n0_list[0] = self.k_n0
 
         if self.noise_process == "OU":
-            self.tau = 3
-            self.Amp = 2
             for i in range(1, self.iterations):
                 k_n0_list[i] = k_n0_list[i-1] + self.dkn0dt(t[i-1], k_n0_list[i-1])*dt + np.sqrt(2*self.sigma_kn0)*np.sqrt(dt)*np.random.normal()
                 k_n0_list[i] = np.clip(k_n0_list[i], 0.1, 5.0) # clipping values to keep in physiological range
