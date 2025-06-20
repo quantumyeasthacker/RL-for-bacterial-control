@@ -69,11 +69,11 @@ class Cell_Population(object):
     def f_S(self, U, phiS_max):
         return phiS_max * (U**self.q / (self.K_u**self.q + U**self.q))
     # f_R, fraction of total cell synthesis capacity devoted to ribosome production
-    def f_R(self, a, U, phiR_max, phiS_max):
-        return (-self.f_prime(a)*self.g(a)*(phiR_max-self.f_S(U,phiS_max)) + self.f(a)*self.g_prime(a)*self.phiR_min) / (-self.f_prime(a)*self.g(a) + self.f(a)*self.g_prime(a))
+    def f_R(self, a, U, phiS_max):
+        return (-self.f_prime(a)*self.g(a)*(self.phiR_max-self.f_S(U,phiS_max)) + self.f(a)*self.g_prime(a)*self.phiR_min) / (-self.f_prime(a)*self.g(a) + self.f(a)*self.g_prime(a))
     # f_X, fraction of cell synthesis capacity devoted to division protein production
-    def f_X(self, a, U, phiR_max, phiS_max):
-        return self.alphaX*(phiR_max - self.f_R(a,U,phiR_max,phiS_max)) + self.betaX
+    def f_X(self, a, U, phiS_max):
+        return self.alphaX*(self.phiR_max - self.f_R(a,U,phiS_max)) + self.betaX
 
     def U_t(self, U):
         ut = 1 - U
@@ -86,10 +86,10 @@ class Cell_Population(object):
         k = k_t * (phi_R - self.phiR_min)
         return k
 
-    def dphiR_dt(self, phi_R, a, U, phiR_max, phiS_max):
+    def dphiR_dt(self, phi_R, a, U, phiS_max):
         # ribosome mass fraction ODE
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
-        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_R(a,U,phiR_max,phiS_max) - phi_R)
+        dpdt = k_t * (phi_R - self.phiR_min) * (self.f_R(a,U,phiS_max) - phi_R)
         return dpdt
 
     def dphiS_dt(self, phi_S, a, phi_R, U, phiS_max):
@@ -98,21 +98,21 @@ class Cell_Population(object):
         dpdt = k_t * (phi_R - self.phiR_min) * (self.f_S(U,phiS_max) - phi_S)
         return dpdt
 
-    def dAAdt(self, a, phi_R, phi_S, U, k_n0, phiR_max):
+    def dAAdt(self, a, phi_R, phi_S, U, k_n0):
         # amino acid concentration ODE (variable nutrient conc.(c))
         k_n = k_n0 * self.f(a) # nutritional efficiency, depends on concentration of nutrients outside cell
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
 
-        dadt = k_n * (phiR_max - phi_R - phi_S) - k_t * (phi_R - self.phiR_min)
+        dadt = k_n * (self.phiR_max - phi_R - phi_S) - k_t * (phi_R - self.phiR_min)
         return dadt
 
     def dUdt(self, U, phi_S, phi_R, a, b):
         # damage concentration ODE
         return self.alpha*phi_R*b - self.beta*phi_S*U - U*self.GrowthRate(a, phi_R, U)
 
-    def dXdt(self, X, a, phi_R, V, U, phiR_max, phiS_max):
+    def dXdt(self, X, a, phi_R, V, U, phiS_max):
         # division protein ODE
-        dxdt = self.f_X(a,U,phiR_max,phiS_max) * self.GrowthRate(a, phi_R, U) * V - self.mu * X
+        dxdt = self.f_X(a,U,phiS_max) * self.GrowthRate(a, phi_R, U) * V - self.mu * X
         return dxdt
 
     def dVdt(self, V, a, phi_R, U):
@@ -121,16 +121,16 @@ class Cell_Population(object):
         return dvdt
 
     # initialize simulation
-    def phiR_ss(self, a, U, k_n0, phiR_max, phiS_max):
+    def phiR_ss(self, a, U, k_n0, phiS_max):
         # function for phi_R at steady state
         k_n = k_n0 * self.f(a) # nutritional efficiency, depends on concentration of nutrients outside cell
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
-        return (k_n*(phiR_max-self.f_S(U,phiS_max)) + k_t*self.phiR_min) / (k_n + k_t)
+        return (k_n*(self.phiR_max-self.f_S(U,phiS_max)) + k_t*self.phiR_min) / (k_n + k_t)
 
-    def func(self, x, k_n0, b, phiR_max, phiS_max):
+    def func(self, x, k_n0, b, phiS_max):
         # function for calculating steady state conditions for given parameters
-        return [self.phiR_ss(x[0],x[2],k_n0,phiR_max,phiS_max) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
-                self.f_R(x[0],x[2],phiR_max,phiS_max) - x[1],
+        return [self.phiR_ss(x[0],x[2],k_n0,phiS_max) - x[1], # x[0]=a, x[1]=phi_R, x[2]=U
+                self.f_R(x[0],x[2],phiS_max) - x[1],
                 self.beta*x[2]*self.f_S(x[2],phiS_max) - self.alpha*x[1]*b]
 
     def initialize(self, num_cells_init, k_n0, b):
@@ -147,32 +147,31 @@ class Cell_Population(object):
         a_birth = np.ones((num_cells_init))*a0
         U_birth = np.ones((num_cells_init))*U0
 
-        phiRmax_birth = np.ones((num_cells_init))*self.phiR_max
         phiSmax_birth = np.ones((num_cells_init))*self.phiS_max
 
         # assigning random initial cell volume, in um^3
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
 
         start_t_stack = np.random.randint(int(cycle_t), int(cycle_t*100) + 1, (num_cells_init))/100
-        birth_size = 1 / self.f_X(a0, U0, self.phiR_max, self.phiS_max) # average cell size at birth at initial steady-state growth
+        birth_size = 1 / self.f_X(a0, U0, self.phiS_max) # average cell size at birth at initial steady-state growth
         V_birth = birth_size * np.exp(self.GrowthRate(a0, phi_R0, U0) * start_t_stack)
-        X_birth = self.f_X(a0,U0,self.phiR_max,self.phiS_max) * V_birth * 0.5
+        X_birth = self.f_X(a0,U0,self.phiS_max) * V_birth * 0.5
 
         self._t = 0
         self._log.append([self._t, k_n0, b, num_cells_init, U0, phi_R0, phi_S0])
-        self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth, phiRmax_birth, phiSmax_birth), axis=0)
+        self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth, phiSmax_birth), axis=0)
 
     def _guess_init_values(self, k_n0, b):
         while True:
             if self.guess_value_list is not None:
                 guess_value_list = self.guess_value_list
-                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiR_max, self.phiS_max))
+                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiS_max))
             else:
                 value1 = np.random.uniform(1e-5, 1e-4)
                 value2 = np.random.uniform(0.2, 0.5)
                 value3 = np.random.uniform(1e-4, 1e-2)
                 guess_value_list = [value1, value2, value3]
-                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiR_max, self.phiS_max)) # requires guess of initial conditions
+                a0,phi_R0,U0 = optimize.fsolve(self.func, guess_value_list, args=(k_n0, b, self.phiS_max)) # requires guess of initial conditions
 
             phi_S0 = self.f_S(U0,self.phiS_max)
             ls = [a0, phi_R0, U0, phi_S0]
@@ -190,11 +189,11 @@ class Cell_Population(object):
     # simulatation implementation
     def MultiIntegrate(self, Species, dt, b, k_n0):
         # numerically solve via Euler-Maruyama method
-        phiR_i,phiS_i,a_i,U_i,X_i,V_i,phiRmax_i,phiSmax_i = Species
+        phiR_i,phiS_i,a_i,U_i,X_i,V_i,phiSmax_i = Species
 
-        phi_R = phiR_i + self.dphiR_dt(phiR_i, a_i, U_i, phiRmax_i, phiSmax_i)*dt
+        phi_R = phiR_i + self.dphiR_dt(phiR_i, a_i, U_i, phiSmax_i)*dt
         phi_S = phiS_i + self.dphiS_dt(phiS_i, a_i, phiR_i, U_i, phiSmax_i)*dt
-        a = a_i + self.dAAdt(a_i, phiR_i, phiS_i, U_i, k_n0, phiRmax_i)*dt
+        a = a_i + self.dAAdt(a_i, phiR_i, phiS_i, U_i, k_n0)*dt
         # ensure that amino acid conc. is not negative
         a[a < 1e-7] = 1e-7
         # if a < 1e-7:
@@ -209,10 +208,10 @@ class Cell_Population(object):
             U[...] = 0
         U[U < 0] = 0
 
-        X = X_i + self.dXdt(X_i, a_i, phiR_i, V_i, U_i, phiRmax_i, phiSmax_i)*dt
+        X = X_i + self.dXdt(X_i, a_i, phiR_i, V_i, U_i, phiSmax_i)*dt
         V = V_i + self.dVdt(V_i, a_i, phiR_i, U_i)*dt
 
-        return np.stack((phi_R, phi_S, a, U, X, V, phiRmax_i, phiSmax_i), axis=0)
+        return np.stack((phi_R, phi_S, a, U, X, V, phiSmax_i), axis=0)
 
     def _cell_population_truncate(self, threshold):
         num_entity = self.populations.shape[0]
@@ -272,11 +271,14 @@ class Cell_Population(object):
                 X_stack_children[5] = X_stack_children[5] * (1 - r)
 
                 if self.mutate:
-                    covmat = np.diag(np.ones(birth_check.sum())*0.1) # set the std of deviation from parent
-                    phiRmax_children = np.random.multivariate_normal(X_stack_children[6],covmat)
-                    X_stack_children[6] = np.clip(phiRmax_children,self.phiR_min,self.phiR_max*1.3)
-                    phiSmax_children = np.random.multivariate_normal(X_stack_children[7],covmat)
-                    X_stack_children[7] = np.clip(phiSmax_children,0,self.phiS_max*1.3)
+                    sigma = 0.1 # set the std of deviation from parent
+                    mu = 0.01 # probability of mutation
+                    scale = 1.4 # hard upper limit on protein expression
+
+                    # mutating each child with probability mu
+                    mut_ind = np.random.rand(birth_check.sum()) < mu
+                    phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,sigma, size=mut_ind.sum()))
+                    X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*scale)
 
                 species_stack[4,birth_check] = 0
                 species_stack[5,birth_check] = species_stack[5,birth_check] * r
