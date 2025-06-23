@@ -1,3 +1,18 @@
-.gitignore
 # ignore all files in ANY directory named keep_local
 keep_local/
+
+.gitignore
+
+*__pycache__/
+
+archive*
+log
+param_space
+workspace
+results*
+figures
+
+*.sh
+*.sub
+*.tar.gz
+
