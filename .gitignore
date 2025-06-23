@@ -1,2 +1,3 @@
+.gitignore
 # ignore all files in ANY directory named keep_local
 keep_local/
