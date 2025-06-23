@@ -8,22 +8,24 @@ class ReplayBuffer:
         self.capacity = capacity
         self.buffer = []
         self.position = int(0)
-        self.transition = namedtuple("Transition", ("state", "action", \
-            "reward", "next_state", "terminated"))
+        self.transition = namedtuple("Transition", ("state", "context", "action", \
+            "reward", "next_state", "next_context", "terminated"))
 
-    def push(self, state, action, reward, next_state, terminated):
-        """Adds new tuple of (state, action, reward, next_state) sample to replay buffer
-        If buffer is full (i.e. more than self. capacity) add new samples to beginning of
+    def push(self, state, context, action, reward, next_state, next_context, terminated):
+        """Adds new sample to replay buffer
+        If buffer is full (i.e. more than self.capacity) add new samples to beginning of
         replay buffer
         Args:
             state: state of system
+            context: vector including additional context which changes less frequently than state
             action: current action
             reward: observed reward
             next_state: next state of system
+            next_context: next context of system
             terminated: denotes if next state is terminated or not (1=terminated state, 0 otherwise)
         """
 
-        to_add = [state, action, reward, next_state, terminated]
+        to_add = [state, context, action, reward, next_state, next_context, terminated]
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
         self.buffer[self.position] = self.transition(*to_add)

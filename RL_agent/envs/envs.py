@@ -28,6 +28,7 @@ class EnvConfig:
 
     num_actions: int = 2
     b_actions: list[int] = field(default_factory=list)
+    dim_context: int = 1
 
     # constant nutrient environmental parameters
     k_n0_constant: Optional[Union[float, None]] = None
@@ -66,6 +67,8 @@ class BaseEnv(object):
         self.num_actions = env_config.num_actions
         self.b_actions = env_config.b_actions
 
+        self.dim_context = env_config.dim_context
+
         self.iterations = int(env_config.delta_t * env_config.n_steps)
         if self.warm_up is None:
             warnings.warn("warm_up is not specified, setting warm_up to delay_embed_len.", category=UserWarning)
@@ -100,8 +103,9 @@ class BaseEnv(object):
         else:
             k_n0_list = k_n0
 
-        _, (num_cells_prev, num_cells) = self.sim_cells.simulate_population(k_n0_list, b, self.delta_t, self.n_steps, self.threshold)
+        _, (num_cells_prev, num_cells), context = self.sim_cells.simulate_population(k_n0_list, b, self.delta_t, self.n_steps, self.threshold)
         return (self.observation(num_cells_prev, num_cells, k_n0_list[-1], b),
+                context,
                 self.reward(num_cells_prev, num_cells, b),
                 self.terminated,
                 self.truncated,
@@ -179,8 +183,8 @@ class ConstantNutrientEnv(BaseEnv):
 
         self._reset()
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(self._k_n0_constant, self.b_init)
-        return obs, info
+            obs, context, _, _, _, info = self._step(self._k_n0_constant, self.b_init)
+        return obs, context, info
 
     def step(self, action) -> tuple:
         b = self.b_actions[action]
@@ -276,8 +280,8 @@ class VariableNutrientEnv(BaseEnv):
 
         self._reset()
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
-        return obs, info
+            obs, context, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
+        return obs, context, info
 
     def step(self, action) -> tuple:
         b = self.b_actions[action]
@@ -325,8 +329,8 @@ class ControlNutrientEnv(BaseEnv):
 
         self._reset(k_n0=k_n0)
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(k_n0, self.b_init)
-        return obs, info
+            obs, context, _, _, _, info = self._step(k_n0, self.b_init)
+        return obs, context, info
 
     def step(self, action) -> tuple:
         k_n0 = self.k_n0_actions[self.k_n0_index[action]]

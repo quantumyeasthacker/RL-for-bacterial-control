@@ -272,7 +272,7 @@ class Cell_Population(object):
 
                 if self.mutate:
                     sigma = 0.1 # set the std of deviation from parent
-                    mu = 0.01 # probability of mutation
+                    mu = 1 # 0.01 # probability of mutation
                     scale = 1.4 # hard upper limit on protein expression
 
                     # mutating each child with probability mu
@@ -308,7 +308,8 @@ class Cell_Population(object):
         phi_R_ave = species_stack[0].mean() if species_stack[0].size > 0 else 0
         phi_S_ave = species_stack[1].mean() if species_stack[1].size > 0 else 0
         self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave, phi_R_ave, phi_S_ave])
-        return self._t, (true_num_cells_prev, true_num_cells_next)
+
+        return self._t, (true_num_cells_prev, true_num_cells_next), phi_S_ave
         # return self._t, self.true_num_cells
 
     @property

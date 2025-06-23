@@ -8,7 +8,6 @@ from joblib import Parallel, delayed
 import copy
 from scipy import signal
 import wandb
-# import pickle
 
 from agent.replaybuffer import ReplayBuffer
 from agent.deepQLnetwork import Model
@@ -29,12 +28,11 @@ class CDQL(object):
         buffer_size: int = 1_000_000,
         batch_size: int = 512,
         gamma: float = 0.99,
-        # lambda_smooth: float = 0.1,
-        # noise_scale : float = 1.0,
         update_freq: int = 2,
         train_freq: int = 1,
         gradient_steps: int = 1,
         use_gpu: bool = False,
+        context_update_freq: int = 50
     ) -> None:
         '''
         Args:
@@ -48,6 +46,7 @@ class CDQL(object):
             train_freq: frequency of training per step
             gradient_steps: number of gradient steps to take each update
             use_gpu: whether to use gpu
+            context_update_freq: frequency of context update
         '''
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
@@ -58,7 +57,8 @@ class CDQL(object):
         self.env = env
         self.model = Model(self.device,
                            num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation),
-                           num_actions = self.env.num_actions)
+                           num_actions = self.env.num_actions,
+                           dim_context = self.env.dim_context)
 
         # env = env_config.env_name(env_config, cell_config)
         # model = Model(self.device, num_inputs = env_config.delay_embed_len*
@@ -67,11 +67,10 @@ class CDQL(object):
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
         self.gamma = gamma
-        # self.lambda_smooth = lambda_smooth
-        # self.noise_scale = noise_scale
         self.update_freq = update_freq
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
+        self.context_update_freq = context_update_freq
 
         self.loss = []
         self.ave_sum_rewards = []
@@ -125,39 +124,27 @@ class CDQL(object):
         for _ in range(self.gradient_steps):
             transitions = self.buffer.sample(self.batch_size)
             batch = self.buffer.transition(*zip(*transitions))
+
             state_batch = self._to_tensor(batch.state)
+            context_batch = self._to_tensor(batch.context).unsqueeze(-1)
             action_batch = self._to_tensor(batch.action).unsqueeze(-1).to(torch.int64)
             reward_batch = self._to_tensor(batch.reward).unsqueeze(-1)
             next_state_batch = self._to_tensor(batch.next_state)
+            next_context_batch = self._to_tensor(batch.next_context).unsqueeze(-1)
             terminated_batch = self._to_tensor(batch.terminated).unsqueeze(-1)
 
             with torch.no_grad():
                 # Add noise to smooth out learning
-                Q_next_1 = torch.min(self.model.q_target_1(next_state_batch), dim=-1, keepdim=True).values
-                Q_next_2 = torch.min(self.model.q_target_2(next_state_batch), dim=-1, keepdim=True).values
+                Q_next_1 = torch.min(self.model.q_target_1(next_state_batch,next_context_batch), dim=-1, keepdim=True).values
+                Q_next_2 = torch.min(self.model.q_target_2(next_state_batch,next_context_batch), dim=-1, keepdim=True).values
                 # Use max want to avoid underestimation bias #####
                 Q_next = torch.maximum(Q_next_1, Q_next_2)
                 Q_expected = reward_batch + self.gamma * Q_next * (1 - terminated_batch)
 
-            Q_1 = self.model.q_1(state_batch).gather(-1, action_batch)
-            Q_2 = self.model.q_2(state_batch).gather(-1, action_batch)
+            Q_1 = self.model.q_1(state_batch,context_batch).gather(-1, action_batch)
+            Q_2 = self.model.q_2(state_batch,context_batch).gather(-1, action_batch)
             L_1 = nn.MSELoss()(Q_1, Q_expected)
             L_2 = nn.MSELoss()(Q_2, Q_expected)
-
-            # # Action smoothness regularization
-            # consecutive_q_1_values = self.model.q_1(state_batch)
-            # next_q_1_values = self.model.q_1(next_state_batch)
-            # action1_probs = F.softmax(consecutive_q_1_values, dim=-1)
-            # next_action1_probs = F.softmax(next_q_1_values, dim=-1)
-            # smoothness1_loss = nn.MSELoss()(action1_probs, next_action1_probs)
-            # L_1 += self.lambda_smooth * smoothness1_loss
-
-            # consecutive_q_2_values = self.model.q_2(state_batch)
-            # next_q_2_values = self.model.q_2(next_state_batch)
-            # action2_probs = F.softmax(consecutive_q_2_values, dim=-1)
-            # next_action2_probs = F.softmax(next_q_2_values, dim=-1)
-            # smoothness2_loss = nn.MSELoss()(action2_probs, next_action2_probs)
-            # L_2 += self.lambda_smooth * smoothness2_loss
 
             self.loss.append([L_1.item(), L_2.item()])
             self.model.q_optimizer_1.zero_grad()
@@ -184,16 +171,18 @@ class CDQL(object):
 
         step_iter = 0
         for episode in range(episodes):
-            obs, _ = self.env.reset()
-            # while True:
-            for _ in range(num_decisions):
-                action = self.model.get_action(obs, deterministic = False, epsilon = epsilon_list[episode])
-                obs_next, reward, terminated, truncated, _ = self.env.step(action)
-                self.buffer.push(obs, action, reward, obs_next, terminated)
+            obs, hidden_context, _ = self.env.reset()
+            for i in range(num_decisions):
+                # updating context periodically
+                if i % self.context_update_freq == 0:
+                    context = hidden_context
+                action = self.model.get_action(obs, context, deterministic = False, epsilon = epsilon_list[episode])
+                obs_next, context_next, reward, terminated, truncated, _ = self.env.step(action)
+                self.buffer.push(obs, context, action, reward, obs_next, context_next, terminated)
                 step_iter += 1
                 if step_iter % self.train_freq == 0:
                     self._update()
-                obs = obs_next
+                obs, hidden_context = obs_next, context_next
                 if terminated or truncated:
                     break
             print(f"Episode {episode} completed.")
@@ -214,7 +203,7 @@ class CDQL(object):
         """
         self.model.q_1.eval()
         self.model.q_2.eval()
-        
+
         extinct_times = []
         extinct_count = 0
         max_cross_corr_kn0 = []
@@ -245,7 +234,7 @@ class CDQL(object):
             if np.std(drug) > 0 and np.std(damage) > 0:
                 cross_correlation(drug, damage, max_cross_corr_U, lag_U)
 
-            # save extinction times            
+            # save extinction times
             if terminated:
                 extinct_times.append(time[-1])
                 extinct_count += 1
@@ -278,15 +267,19 @@ class CDQL(object):
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
-        obs, _ = self.env.reset()
+        obs, hidden_context, _ = self.env.reset()
         rewards = []
         Q_values = []
-        for _ in range(num_decisions):
-            action = self.model.get_action(obs, deterministic = True)
-            obs_tensor = self._to_tensor(obs)
+        for i in range(num_decisions):
+            if i % self.context_update_freq == 0:
+                context = hidden_context
+            action = self.model.get_action(obs, context, deterministic = True)
+            obs_tensor = self._to_tensor(obs).unsqueeze(0)
+            context_tensor = self._to_tensor(context)
+            context_tensor = context_tensor.unsqueeze(0) if context_tensor.dim() == 0 else context_tensor
             with torch.no_grad():
-                Q_value = [q(obs_tensor) for q in self.model.q_networks]
-            obs, reward, terminated, truncated, info = self.env.step(action)
+                Q_value = [q(obs_tensor,context_tensor.unsqueeze(0)) for q in self.model.q_networks]
+            obs, hidden_context, reward, terminated, truncated, info = self.env.step(action)
             rewards.append(reward)
             Q_values.append(Q_value)
             if terminated or truncated:

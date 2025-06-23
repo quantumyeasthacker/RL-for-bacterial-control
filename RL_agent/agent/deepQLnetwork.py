@@ -7,36 +7,37 @@ import numpy as np
 
 
 class Q(nn.Module):
-    def __init__(self, num_inputs, num_actions):
+    def __init__(self, num_inputs, num_actions, dim_context):
         super().__init__()
-        self.fc1 = nn.Linear(num_inputs, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, 64)
-        self.fc4 = nn.Linear(64, num_actions)
+        self.hidden_dim = 64
+        self.context = nn.Linear(dim_context, self.hidden_dim**2)
+        self.fc1 = nn.Linear(num_inputs, self.hidden_dim)
+        # self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.fc4 = nn.Linear(self.hidden_dim, num_actions)
 
-        # nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
-        # nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
-        # nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='relu')
-        # nn.init.kaiming_uniform_(self.fc4.weight, nonlinearity='relu')
-
-    def forward(self, s):
+    def forward(self, s, c):
         s = F.relu(self.fc1(s))
-        s = F.relu(self.fc2(s))
+        c = self.context(c)
+        c = c.reshape(c.shape[0], self.hidden_dim, self.hidden_dim)
+        s = torch.matmul(s.unsqueeze(1), c)
+        # s = F.relu(self.fc2(s))
         s = F.relu(self.fc3(s))
         q_a = self.fc4(s)
-        return q_a
+        return q_a.squeeze(1)
 
 
 class Model(object):
-    def __init__(self, device, num_inputs, num_actions, learning_rate=1e-4):
+    def __init__(self, device, num_inputs, num_actions, dim_context, learning_rate=1e-4):
         self.device = device
         self.num_inputs = num_inputs
         self.num_actions = num_actions
-        self.q_1 = Q(num_inputs, num_actions).to(device)
-        self.q_target_1 = Q(num_inputs, num_actions).to(device)
+        self.dim_context = dim_context
+        self.q_1 = Q(num_inputs, num_actions, dim_context).to(device)
+        self.q_target_1 = Q(num_inputs, num_actions, dim_context).to(device)
 
-        self.q_2 = Q(num_inputs, num_actions).to(device)
-        self.q_target_2 = Q(num_inputs, num_actions).to(device)
+        self.q_2 = Q(num_inputs, num_actions, dim_context).to(device)
+        self.q_target_2 = Q(num_inputs, num_actions, dim_context).to(device)
         self.q_networks: list[nn.Module] = [self.q_1, self.q_2, self.q_target_1, self.q_target_2]
 
         self.q_target_1.eval()
@@ -48,63 +49,32 @@ class Model(object):
         self._update(self.q_target_1, self.q_1)
         self._update(self.q_target_2, self.q_2)
         self.tau = 0.005
-        # self.grad_update_num = 0
-    
-    # def _smaller_weights_last_layer(self, network, scale):
-    #     """Updates the last layer with smaller weights
-    #     Args:
-    #         network: network to update
-    #         scale: amount to scale down weights of last layer
-    #     """
-    #     last_layers = list(network.state_dict().keys())[-2:]
-    #     for layer in last_layers:
-    #         network.state_dict()[layer] /= scale
 
-    # def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, ...]:
-    #     assert len(obs) == self.num_inputs
-    #     return tuple(q_net(obs) for q_net in self.q_networks)
-
-    # def q1_forward(self, obs: torch.Tensor) -> torch.Tensor:
-    #     return self.q_1(obs)
-    
-    def get_action(self, obs, deterministic: bool = True, epsilon: float = 0):
+    def get_action(self, obs, context, deterministic: bool = True, epsilon: float = 0):
         """Returns action based on epsilon-greedy policy
         Args:
             obs: obs of system
+            context: context of system
+            deterministic: if True, chooses greedy action
             epsilon: epsilon value
         """
         assert len(obs) == self.num_inputs
+        context = [context] if isinstance(context,(float,int)) else context
+        assert len([context]) == self.dim_context
         self.q_1.eval()
         self.q_2.eval()
-        
+
         if not deterministic and np.random.rand() < epsilon:
             action = np.random.randint(self.num_actions)
         else:
             with torch.no_grad():
-                curr_obs = torch.tensor(obs).float().to(self.device)
+                curr_obs = torch.tensor(obs).unsqueeze(0).float().to(self.device)
+                curr_context = torch.tensor(context).unsqueeze(0).float().to(self.device)
                 # action = torch.argmin(self.q_1(curr_obs), dim=-1) # for batch running purposes
-                action = torch.argmin(self.q_1(curr_obs)).item()
+                action = torch.argmin(self.q_1(curr_obs, curr_context)).item()
             # self.q_1.train()
         return action
 
-    # def get_action_smooth_exploration(self, obs, deterministic: bool = True, noise_scale: float = 1):
-    #     """Returns action based on epsilon-greedy policy
-    #     Args:
-    #         obs: obs of system
-    #         epsilon: epsilon value
-    #     """
-    #     assert len(obs) == self.num_inputs
-    #     self.q_1.eval()
-    #     self.q_2.eval()
-        
-    #     with torch.no_grad():
-    #         curr_obs = torch.tensor(obs).float().to(self.device)
-    #         q_values = self.q_1(curr_obs)
-    #         if not deterministic:
-    #             noise = torch.randn_like(q_values) * noise_scale
-    #             q_values = q_values + noise
-    #             action = torch.argmin(q_values).item()
-    #     return action
 
     def _update(self, target, local):
         """Set the parametrs of target network to be that of local network
