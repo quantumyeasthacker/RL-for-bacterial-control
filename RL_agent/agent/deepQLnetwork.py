@@ -10,21 +10,43 @@ class Q(nn.Module):
     def __init__(self, num_inputs, num_actions, dim_context):
         super().__init__()
         self.hidden_dim = 64
-        self.context = nn.Linear(dim_context, self.hidden_dim**2)
-        self.fc1 = nn.Linear(num_inputs, self.hidden_dim)
-        # self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        # self.context = nn.Linear(dim_context, self.hidden_dim**2)
+        self.fc1 = nn.Linear(num_inputs+dim_context, self.hidden_dim)
+        self.fc2 = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.fc3 = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.fc4 = nn.Linear(self.hidden_dim, num_actions)
 
     def forward(self, s, c):
+        s = torch.cat((s,c), dim=-1)
         s = F.relu(self.fc1(s))
-        c = self.context(c)
-        c = c.reshape(c.shape[0], self.hidden_dim, self.hidden_dim)
-        s = torch.matmul(s.unsqueeze(1), c)
-        # s = F.relu(self.fc2(s))
+        # c = self.context(c)
+        # c = c.reshape(c.shape[0], self.hidden_dim, self.hidden_dim)
+        # s = torch.matmul(s.unsqueeze(1), c)
+        s = F.relu(self.fc2(s))
         s = F.relu(self.fc3(s))
         q_a = self.fc4(s)
-        return q_a.squeeze(1)
+        return q_a
+
+
+# class Q(nn.Module):
+#     def __init__(self, num_inputs, num_actions, dim_context):
+#         super().__init__()
+#         self.hidden_dim = 64
+#         self.context = nn.Linear(dim_context, self.hidden_dim**2)
+#         self.fc1 = nn.Linear(num_inputs, self.hidden_dim)
+#         # self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+#         self.fc3 = nn.Linear(self.hidden_dim, self.hidden_dim)
+#         self.fc4 = nn.Linear(self.hidden_dim, num_actions)
+
+#     def forward(self, s, c):
+#         s = F.relu(self.fc1(s))
+#         c = self.context(c)
+#         c = c.reshape(c.shape[0], self.hidden_dim, self.hidden_dim)
+#         s = torch.matmul(s.unsqueeze(1), c)
+#         # s = F.relu(self.fc2(s))
+#         s = F.relu(self.fc3(s))
+#         q_a = self.fc4(s)
+#         return q_a.squeeze(1)
 
 
 class Model(object):
