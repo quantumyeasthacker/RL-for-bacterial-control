@@ -16,7 +16,7 @@ mpl.rcParams['ps.fonttype'] = 42
 
 EPS = 1e-6
 # default_color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-COLOR_LIST = ["#dec60c", "#a7c82f", "#548c6a"]
+COLOR_LIST = ["#dec60c", "#a7c82f", "#548c6a", "#5e6b75"]
 
 # BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/")
 BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
@@ -184,7 +184,7 @@ with open(param_file, "r") as f:
 
 param_sim = [x.strip() for x in param_sim]
 param_sim = [x.split(" ") for x in param_sim]
-param_sim = [x for x in param_sim if x[1] == "constant"]
+# param_sim = [x for x in param_sim if x[1] == "constant"]
 
 df_varenv_sim = pd.DataFrame(param_sim)
 df_varenv_sim.columns = ["half_period", "initialize_app", "antibiotic_value", "T_k0"]
@@ -201,8 +201,9 @@ final_cell_std_list = []
 freq_list = []
 extinction_frac_list = []
 extinction_rate_list = []
+extinction_rate_std_list = []
 for param in param_sim:
-    # half_period = int(param[0])
+    half_period = int(param[0])
     initialize_app = param[1]
     antibiotic_value = float(param[2])
     folder_name = sim_folder / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}/"
@@ -221,6 +222,7 @@ for param in param_sim:
 
     extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
     extinction_rate_list.append(np.mean(extinction_rate))
+    extinction_rate_std_list.append(np.std(extinction_rate))
 
     # freq_param_list = []
     # for tcbk in tcbk_list:
@@ -243,6 +245,7 @@ df_varenv_sim["sim_log_cell_std"] = final_cell_std_list
 df_varenv_sim["sim_freq"] = freq_list
 df_varenv_sim["extinction_frac"] = extinction_frac_list
 df_varenv_sim["extinction_rate"] = extinction_rate_list
+df_varenv_sim["extinction_rate_std"] = extinction_rate_std_list
 
 df_varenv_sim_cst_app = df_varenv_sim[df_varenv_sim["initialize_app"] == "constant"]
 
@@ -277,6 +280,7 @@ eval_cell_std_list = []
 freq_list = []
 extinction_frac_list = []
 extinction_rate_list = []
+extinction_rate_std_list = []
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
@@ -289,6 +293,7 @@ for param in param_agent:
 
     extinction_rate = [i_ext / (tcbk[0, -1] * delta_t) for i_ext, tcbk in zip(extinction, tcbk_list)]
     extinction_rate_list.append(np.mean(extinction_rate))
+    extinction_rate_std_list.append(np.std(extinction_rate))
 
     freq_param_list = []
     for tcbk in tcbk_list:
@@ -311,6 +316,7 @@ df_varenv_eval["eval_log_cell_std"] = eval_cell_std_list
 df_varenv_eval["eval_freq"] = freq_list
 df_varenv_eval["extinction_frac"] = extinction_frac_list
 df_varenv_eval["extinction_rate"] = extinction_rate_list
+df_varenv_eval["extinction_rate_std"] = extinction_rate_std_list
 
 
 # %% ----- ----- ----- ----- generalized eval ----- ----- ----- ----- %% #
@@ -399,6 +405,7 @@ df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=F
 df_constant_eval_app = df_constant_eval_app.merge(df_constant_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_constant_eval_app["log_diff"] = df_constant_eval_app["sim_log_cell"] - df_constant_eval_app["eval_log_cell"]
 
+# %%
 # df_varenv_sim_cst_app
 # df_varenv_eval
 df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False).apply(
@@ -408,11 +415,11 @@ df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False
 df_varenv_eval_app = df_varenv_eval_app.merge(df_varenv_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_varenv_eval_app["log_diff"] = df_varenv_eval_app["sim_log_cell"] - df_varenv_eval_app["eval_log_cell"]
 
-df_eval_app = pd.concat([df_constant_eval_app, df_varenv_eval_app], ignore_index=True)
-
+# %%
 # df_generalized_eval
 # df_constant_sim_cst_app
 # df_varenv_sim_cst_app
+df_eval_app = pd.concat([df_constant_eval_app, df_varenv_eval_app], ignore_index=True)
 
 sum_df = df_generalized_eval.groupby(["episodes", "rep"])["eval_log_cell"].sum().reset_index()
 min_rep = sum_df.loc[sum_df["eval_log_cell"].idxmin()]
@@ -528,7 +535,11 @@ fig, ax = plt.subplots(figsize=(8, 6))
 nutrient_value_list = [1.0, 2.0, 3.0]
 half_period_threshold = 45
 
-df_constant_selected = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+# df_constant_selected = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+# df_constant_selected = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
+#     get_best_row_extinct_rate, include_groups=True
+# ).reset_index(drop=True)
+# df_constant_selected = df_constant_eval_app
 
 for i_nut, nutrient_value in enumerate(nutrient_value_list):
     df_selected = df_constant_sim[(df_constant_sim["nutrient_value"] == nutrient_value) & (df_constant_sim["half_period"] <= half_period_threshold)].sort_values(by='sim_freq', ascending=True)
@@ -548,7 +559,7 @@ for i_nut, nutrient_value in enumerate(nutrient_value_list):
     df_selected = df_constant_sim[df_constant_sim["nutrient_value"] == nutrient_value].sort_values(by='sim_freq', ascending=True)
     constant_value = df_selected.loc[df_selected["initialize_app"] == "constant", "sim_log_cell"]
     
-    eval_entry = df_constant_selected[(df_constant_selected["nutrient_value"] == nutrient_value)]
+    eval_entry = df_constant_eval_app[(df_constant_eval_app["nutrient_value"] == nutrient_value)]
     x = eval_entry["eval_freq"].to_numpy()
     y = constant_value.to_numpy() -  eval_entry["eval_log_cell"].to_numpy()
     y_std = eval_entry["eval_log_cell_std"].to_numpy()
@@ -617,5 +628,42 @@ fig.savefig(BASE_PATH / "figures_pdf" / "constant_special_threshold_45-modified.
 # fig.tight_layout()
 # fig.savefig("figures_jpg/constant_gen_threshold_45.jpg", dpi=600, bbox_inches='tight')
 
+
+# %% ----- ----- ----- ----- plot var v.s. special ----- ----- ----- ----- %% #
+fig, ax = plt.subplots(figsize=(8, 6))
+T_k0_list = [6, 12, 18, 24]
+half_period_threshold = 45
+
+for i_T_k0, T_k0 in enumerate(T_k0_list):
+    df_selected = df_varenv_sim[(df_varenv_sim["T_k0"] == T_k0) & (df_varenv_sim["half_period"] <= half_period_threshold)].sort_values(by='sim_freq', ascending=True)
+
+    x = df_selected["sim_freq"].to_numpy()
+    y = df_selected["extinction_rate"].to_numpy()
+    y_std = df_selected["extinction_rate_std"].to_numpy()
+
+    ax.scatter(x, y, color=COLOR_LIST[i_T_k0], s=10, alpha=0.6)
+    ax.plot(x, y, label = '%.1f'%T_k0, color=COLOR_LIST[i_T_k0])
+    # ax.fill_between(x, y - y_std, y + y_std, color=COLOR_LIST[i_T_k0], alpha=0.2)
+
+for i_T_k0, T_k0 in enumerate(T_k0_list):
+    eval_entry = df_varenv_eval_app[(df_varenv_eval_app["T_k0"] == T_k0)]
+    x = eval_entry["extinction_rate"].to_numpy()
+    y = eval_entry["extinction_rate"].to_numpy()
+    y_std = eval_entry["extinction_rate_std"].to_numpy()
+    
+    ax.scatter(x, y, color=COLOR_LIST[i_T_k0], marker='*', s=70, linewidth=0.75)
+    # ax.errorbar(x, y, yerr=y_std, fmt='none', c='black', capsize=3)
+
+ax.axhline(0, color='k', linestyle='--')
+# ax.set_xscale('log')
+# ax.set_yscale('log')
+ax.set_xlabel(r'Frequency of pulsing ($h^{-1}$)')
+# ax.set_ylabel('Average population size (across 100 trials and 200 decisions)')
+ax.set_ylabel(r'extinction rate')
+ax.set_title(r'Effect of pulsing frequency on population size (antibiotic conc. = 3.72)')
+ax.legend(loc = "upper left", bbox_to_anchor=(1, 1), fontsize = 10, title="T_k0")
+fig.tight_layout()
+fig.savefig(BASE_PATH / "figures_jpg" / "varenv_special_threshold_45-modified.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / "varenv_special_threshold_45-modified.pdf", dpi=600, bbox_inches='tight')
 
 # %%
