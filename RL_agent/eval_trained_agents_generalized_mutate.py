@@ -22,7 +22,7 @@ if MAIN:
     results_dir = sys.argv[8]
     episodes = int(sys.argv[9])
     training_episode = sys.argv[10]
-    mutation_prob = sys.argv[11]
+    mutate_prob = sys.argv[11]
 
     ## ----- wandb setting ----- ##
     trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep_run}"
@@ -36,7 +36,7 @@ if MAIN:
     b_observation = True
     use_gpu = False
 
-    cell_config = CellConfig(mutate=True, mutation_prob=mutation_prob)
+    cell_config = CellConfig(mutate=True, mutate_prob=mutate_prob)
 
     if eval_env == "constenv":
         env_config = EnvConfig(
