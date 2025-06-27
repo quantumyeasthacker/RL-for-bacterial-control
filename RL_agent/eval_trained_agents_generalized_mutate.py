@@ -22,7 +22,7 @@ if MAIN:
     results_dir = sys.argv[8]
     episodes = int(sys.argv[9])
     training_episode = sys.argv[10]
-    mutate_prob = sys.argv[11]
+    mutate_prob = float(sys.argv[11])
 
     ## ----- wandb setting ----- ##
     trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep_run}"
