@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import optimize
 from dataclasses import dataclass
+from typing import Optional, Union
 
 
 @dataclass
@@ -12,6 +13,7 @@ class CellConfig:
     n_f: int = 2 # cooperativity in feedback
     n_g: int = 2
     mutate: bool = False # if True, phiS_max and phiR_max can change at division
+    mutate_prob: Optional[Union[float, None]] = 0.01 # probability of mutation
 
     # Kratz and Banerjee 2023
     sigma: float = 0.015 # noise strength
@@ -33,6 +35,7 @@ class Cell_Population(object):
         self.guess_value_list = None
         self._log = None
         self.mutate = cell_config.mutate
+        self.mutate_prob = cell_config.mutate_prob
 
         # cell parameters
         self.cell_config = cell_config
@@ -272,11 +275,10 @@ class Cell_Population(object):
 
                 if self.mutate:
                     sigma = 0.1 # set the std of deviation from parent
-                    mu = 0.01 # probability of mutation
                     scale = 1.4 # hard upper limit on protein expression
 
                     # mutating each child with probability mu
-                    mut_ind = np.random.rand(birth_check.sum()) < mu
+                    mut_ind = np.random.rand(birth_check.sum()) < self.mutate_prob
                     phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,sigma, size=mut_ind.sum()))
                     X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*scale)
 

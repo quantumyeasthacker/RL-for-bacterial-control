@@ -78,6 +78,9 @@ class BaseEnv(object):
         self._k_n0_constant = None
         self._T_k_n0 = None
 
+        if cell_config.mutate:
+            assert cell_config.mutate_prob is not None, "mutation rate must be specified"
+
     def reset(self):
         raise NotImplementedError
 
