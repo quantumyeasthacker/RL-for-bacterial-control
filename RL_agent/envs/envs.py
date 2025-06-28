@@ -25,6 +25,7 @@ class EnvConfig:
     k_n0_observation: bool = True
     b_observation: bool = True
     omega: float = 0.02
+    num_decisions: int = 300
 
     num_actions: int = 2
     b_actions: list[int] = field(default_factory=list)
@@ -65,6 +66,7 @@ class BaseEnv(object):
 
         self.num_actions = env_config.num_actions
         self.b_actions = env_config.b_actions
+        self.num_decisions = env_config.num_decisions
 
         self.iterations = int(env_config.delta_t * env_config.n_steps)
         if self.warm_up is None:
@@ -93,24 +95,25 @@ class BaseEnv(object):
         self.num_cells_history = [0] * self.delay_embed_len
         self.k_n0_history = [0] * self.delay_embed_len
         self.b_history = [0] * self.delay_embed_len
+        self.time_index = [1] + [0] * (self.num_decisions - 1)
 
     def step(self, action):
         raise NotImplementedError
 
-    def _step(self, k_n0: Union[list, float], b: float):
+    def _step(self, k_n0: Union[list, float], b: float, warmup: bool = False):
         if isinstance(k_n0, float) or len(k_n0) == 1:
             k_n0_list = np.ones(self.iterations) * k_n0
         else:
             k_n0_list = k_n0
 
         _, (num_cells_prev, num_cells) = self.sim_cells.simulate_population(k_n0_list, b, self.delta_t, self.n_steps, self.threshold)
-        return (self.observation(num_cells_prev, num_cells, k_n0_list[-1], b),
+        return (self.observation(num_cells_prev, num_cells, k_n0_list[-1], b, warmup),
                 self.reward(num_cells_prev, num_cells, b),
                 self.terminated,
                 self.truncated,
                 self.info)
 
-    def observation(self, num_cells_prev, num_cells, k_n0, b):
+    def observation(self, num_cells_prev, num_cells, k_n0, b, warmup):
         num_cells = 1e-5 if num_cells == 0 else num_cells
         growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
         self.num_cells_history.pop(0)
@@ -119,7 +122,10 @@ class BaseEnv(object):
         self.k_n0_history.append(k_n0)
         self.b_history.pop(0)
         self.b_history.append(b)
-        obs = self.num_cells_history + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
+        if not warmup:
+            self.time_index.pop(-1)
+            self.time_index.insert(0,0)
+        obs = self.num_cells_history + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation + self.time_index
         return copy.deepcopy(obs)
 
     def reward(self, num_cells_prev, num_cells, b):
@@ -182,7 +188,7 @@ class ConstantNutrientEnv(BaseEnv):
 
         self._reset()
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(self._k_n0_constant, self.b_init)
+            obs, _, _, _, info = self._step(self._k_n0_constant, self.b_init, warmup=True)
         return obs, info
 
     def step(self, action) -> tuple:
@@ -279,7 +285,7 @@ class VariableNutrientEnv(BaseEnv):
 
         self._reset()
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init)
+            obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init, warmup=True)
         return obs, info
 
     def step(self, action) -> tuple:
@@ -328,7 +334,7 @@ class ControlNutrientEnv(BaseEnv):
 
         self._reset(k_n0=k_n0)
         for _ in range(self.warm_up):
-            obs, _, _, _, info = self._step(k_n0, self.b_init)
+            obs, _, _, _, info = self._step(k_n0, self.b_init, warmup=True)
         return obs, info
 
     def step(self, action) -> tuple:

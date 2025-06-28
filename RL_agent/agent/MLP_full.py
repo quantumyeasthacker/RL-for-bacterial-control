@@ -57,7 +57,7 @@ class CDQL(object):
 
         self.env = env
         self.model = Model(self.device,
-                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation),
+                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation) + self.env.num_decisions,
                            num_actions = self.env.num_actions)
 
         # env = env_config.env_name(env_config, cell_config)
@@ -67,8 +67,6 @@ class CDQL(object):
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
         self.gamma = gamma
-        # self.lambda_smooth = lambda_smooth
-        # self.noise_scale = noise_scale
         self.update_freq = update_freq
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
@@ -144,21 +142,6 @@ class CDQL(object):
             L_1 = nn.MSELoss()(Q_1, Q_expected)
             L_2 = nn.MSELoss()(Q_2, Q_expected)
 
-            # # Action smoothness regularization
-            # consecutive_q_1_values = self.model.q_1(state_batch)
-            # next_q_1_values = self.model.q_1(next_state_batch)
-            # action1_probs = F.softmax(consecutive_q_1_values, dim=-1)
-            # next_action1_probs = F.softmax(next_q_1_values, dim=-1)
-            # smoothness1_loss = nn.MSELoss()(action1_probs, next_action1_probs)
-            # L_1 += self.lambda_smooth * smoothness1_loss
-
-            # consecutive_q_2_values = self.model.q_2(state_batch)
-            # next_q_2_values = self.model.q_2(next_state_batch)
-            # action2_probs = F.softmax(consecutive_q_2_values, dim=-1)
-            # next_action2_probs = F.softmax(next_q_2_values, dim=-1)
-            # smoothness2_loss = nn.MSELoss()(action2_probs, next_action2_probs)
-            # L_2 += self.lambda_smooth * smoothness2_loss
-
             self.loss.append([L_1.item(), L_2.item()])
             self.model.q_optimizer_1.zero_grad()
             self.model.q_optimizer_2.zero_grad()
@@ -171,7 +154,7 @@ class CDQL(object):
                 self.model.update_target_nn()
         # self.model.grad_update_num +=1
 
-    def train(self, episodes: int, num_decisions: int, num_evals: int = 10, folder_name: str = "./") -> None:
+    def train(self, episodes: int, num_evals: int = 10, folder_name: str = "./") -> None:
         """Train the model
         Args:
             episodes: number of episodes to train
@@ -185,8 +168,7 @@ class CDQL(object):
         step_iter = 0
         for episode in range(episodes):
             obs, _ = self.env.reset()
-            # while True:
-            for _ in range(num_decisions):
+            for _ in range(self.env.num_decisions):
                 action = self.model.get_action(obs, deterministic = False, epsilon = epsilon_list[episode])
                 obs_next, reward, terminated, truncated, _ = self.env.step(action)
                 self.buffer.push(obs, action, reward, obs_next, terminated)
@@ -201,20 +183,20 @@ class CDQL(object):
             if (episode % 10 == 0) or (episode == episodes - 1):
                 # self._save_data(folder_name)
                 self._save_data(os.path.join(folder_name, f"episode_{episode}"))
-                self.evalulate(episode, num_decisions, num_evals, folder_name)
+                self.evalulate(episode, num_evals, folder_name)
 
             if episode == episodes - 1:
                 plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, folder_name,
                                    self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target)
 
-    def evalulate(self, episode: int, num_decisions: int, num_evals: int, folder_name: str) -> None:
+    def evalulate(self, episode: int, num_evals: int, folder_name: str) -> None:
         """Evaluate the model
         Args:
             num_decisions: number of decisions to make
         """
         self.model.q_1.eval()
         self.model.q_2.eval()
-        
+
         extinct_times = []
         extinct_count = 0
         max_cross_corr_kn0 = []
@@ -223,8 +205,8 @@ class CDQL(object):
         lag_U = []
 
 
-        results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for _ in range(num_evals))
-        # results = [self.eval_step(num_decisions) for _ in range(num_evals)]
+        results = Parallel(n_jobs=10)(delayed(self.eval_step)(self.env.num_decisions) for _ in range(num_evals))
+        # results = [self.eval_step(self.env.num_decisions) for _ in range(num_evals)]
         sum_rewards_all, min_Q_values_all, terminated_all, _, info_all = zip(*results)
         ave_q1, ave_q2, ave_q1_target, ave_q2_target = np.mean(min_Q_values_all, axis=0)
 
