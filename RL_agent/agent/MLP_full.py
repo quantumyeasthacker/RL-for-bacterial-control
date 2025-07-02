@@ -7,7 +7,7 @@ import numpy as np
 from joblib import Parallel, delayed
 import copy
 from scipy import signal
-import wandb
+# import wandb
 # import pickle
 
 from agent.replaybuffer import ReplayBuffer
@@ -57,7 +57,7 @@ class CDQL(object):
 
         self.env = env
         self.model = Model(self.device,
-                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation) + self.env.num_decisions,
+                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation) + 1,
                            num_actions = self.env.num_actions)
 
         # env = env_config.env_name(env_config, cell_config)
@@ -168,9 +168,9 @@ class CDQL(object):
         step_iter = 0
         for episode in range(episodes):
             obs, _ = self.env.reset()
-            for _ in range(self.env.num_decisions):
+            for i in range(self.env.num_decisions):
                 action = self.model.get_action(obs, deterministic = False, epsilon = epsilon_list[episode])
-                obs_next, reward, terminated, truncated, _ = self.env.step(action)
+                obs_next, reward, terminated, truncated, _ = self.env.step(action, i)
                 self.buffer.push(obs, action, reward, obs_next, terminated)
                 step_iter += 1
                 if step_iter % self.train_freq == 0:
@@ -247,28 +247,28 @@ class CDQL(object):
         ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
         ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
         # log via wandb
-        wandb.log({
-            "extinct_fraction": extinct_count/num_evals,
-            "ave_ext_rate": 1/ave_ext_time,
-            "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
-            "ave_corr_lag_kn0": ave_corr_lag_kn0,
-            "ave_max_cross_corr_U": ave_max_cross_corr_U,
-            "ave_corr_lag_U": ave_corr_lag_U,
-            "ave total reward": np.mean(sum_rewards_all),
-            "ave min Q1": ave_q1
-        })
+        # wandb.log({
+        #     "extinct_fraction": extinct_count/num_evals,
+        #     "ave_ext_rate": 1/ave_ext_time,
+        #     "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
+        #     "ave_corr_lag_kn0": ave_corr_lag_kn0,
+        #     "ave_max_cross_corr_U": ave_max_cross_corr_U,
+        #     "ave_corr_lag_U": ave_corr_lag_U,
+        #     "ave total reward": np.mean(sum_rewards_all),
+        #     "ave min Q1": ave_q1
+        # })
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
         obs, _ = self.env.reset()
         rewards = []
         Q_values = []
-        for _ in range(num_decisions):
+        for i in range(num_decisions):
             action = self.model.get_action(obs, deterministic = True)
             obs_tensor = self._to_tensor(obs)
             with torch.no_grad():
                 Q_value = [q(obs_tensor) for q in self.model.q_networks]
-            obs, reward, terminated, truncated, info = self.env.step(action)
+            obs, reward, terminated, truncated, info = self.env.step(action, i)
             rewards.append(reward)
             Q_values.append(Q_value)
             if terminated or truncated:

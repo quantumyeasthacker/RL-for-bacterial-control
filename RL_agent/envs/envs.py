@@ -95,25 +95,25 @@ class BaseEnv(object):
         self.num_cells_history = [0] * self.delay_embed_len
         self.k_n0_history = [0] * self.delay_embed_len
         self.b_history = [0] * self.delay_embed_len
-        self.time_index = [1] + [0] * (self.num_decisions - 1)
+        self.time_index = [float(-1)]
 
     def step(self, action):
         raise NotImplementedError
 
-    def _step(self, k_n0: Union[list, float], b: float, warmup: bool = False):
+    def _step(self, k_n0: Union[list, float], b: float, decision_num: Union[int, None] = None, warmup: bool = False):
         if isinstance(k_n0, float) or len(k_n0) == 1:
             k_n0_list = np.ones(self.iterations) * k_n0
         else:
             k_n0_list = k_n0
 
         _, (num_cells_prev, num_cells) = self.sim_cells.simulate_population(k_n0_list, b, self.delta_t, self.n_steps, self.threshold)
-        return (self.observation(num_cells_prev, num_cells, k_n0_list[-1], b, warmup),
+        return (self.observation(num_cells_prev, num_cells, k_n0_list[-1], b, decision_num, warmup),
                 self.reward(num_cells_prev, num_cells, b),
                 self.terminated,
                 self.truncated,
                 self.info)
 
-    def observation(self, num_cells_prev, num_cells, k_n0, b, warmup):
+    def observation(self, num_cells_prev, num_cells, k_n0, b, decision_num, warmup):
         num_cells = 1e-5 if num_cells == 0 else num_cells
         growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
         self.num_cells_history.pop(0)
@@ -123,8 +123,7 @@ class BaseEnv(object):
         self.b_history.pop(0)
         self.b_history.append(b)
         if not warmup:
-            self.time_index.pop(-1)
-            self.time_index.insert(0,0)
+            self.time_index = [2*(decision_num / self.num_decisions) - 1]
         obs = self.num_cells_history + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation + self.time_index
         return copy.deepcopy(obs)
 
@@ -191,9 +190,9 @@ class ConstantNutrientEnv(BaseEnv):
             obs, _, _, _, info = self._step(self._k_n0_constant, self.b_init, warmup=True)
         return obs, info
 
-    def step(self, action) -> tuple:
+    def step(self, action, decision_num) -> tuple:
         b = self.b_actions[action]
-        return self._step(self._k_n0_constant, b)
+        return self._step(self._k_n0_constant, b, decision_num)
 
 
 class VariableNutrientEnv(BaseEnv):
@@ -288,9 +287,9 @@ class VariableNutrientEnv(BaseEnv):
             obs, _, _, _, info = self._step(self.sim_k_n0(), self.b_init, warmup=True)
         return obs, info
 
-    def step(self, action) -> tuple:
+    def step(self, action, decision_num) -> tuple:
         b = self.b_actions[action]
-        return self._step(self.sim_k_n0(), b)
+        return self._step(self.sim_k_n0(), b, decision_num)
 
 
 class GeneralizedAgentEnv(BaseEnv):
@@ -314,8 +313,8 @@ class GeneralizedAgentEnv(BaseEnv):
             self.env = self.env_type_2
         return self.env.reset()
 
-    def step(self, action) -> tuple:
-        return self.env.step(action)
+    def step(self, action, decision_num) -> tuple:
+        return self.env.step(action, decision_num)
 
 
 class ControlNutrientEnv(BaseEnv):
@@ -337,13 +336,13 @@ class ControlNutrientEnv(BaseEnv):
             obs, _, _, _, info = self._step(k_n0, self.b_init, warmup=True)
         return obs, info
 
-    def step(self, action) -> tuple:
+    def step(self, action, decision_num) -> tuple:
         k_n0 = self.k_n0_actions[self.k_n0_index[action]]
         b = self.b_actions[self.b_index[action]]
-        return self._step(k_n0, b)
+        return self._step(k_n0, b, decision_num)
 
-    def step_hardcode(self, k_n0, b) -> tuple:
-        return self._step(k_n0, b)
+    def step_hardcode(self, k_n0, b, decision_num) -> tuple:
+        return self._step(k_n0, b, decision_num)
 
 
 def is_range_inside(list_a, list_b):
