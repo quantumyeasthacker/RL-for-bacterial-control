@@ -20,7 +20,7 @@ mpl.rcParams['ps.fonttype'] = 42
 EPS = 1e-6
 # default_color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 # COLOR_LIST = ["#dec60c", "#a7c82f", "#548c6a"]
-BASE_PATH = Path("/Users/josiahk/Library/CloudStorage/Box-Box/Zihang_data")
+BASE_PATH = Path("/Users/Josiah/Library/CloudStorage/Box-Box/Zihang_data")
 
 # %%
 delta_t = 0.2
@@ -35,17 +35,16 @@ max_pop: int = int(1e11)
 
 # %%
 def detect_drug_switch(signal, low_value=0.0, high_value=3.72):
-    
+
     n = len(signal)
     low_to_high = np.zeros(n)
     high_to_low = np.zeros(n)
     i = 1
 
     for i in range(n):
-        # Detect low_value run
         if signal[i-1] == low_value and signal[i] == high_value:
             low_to_high[i] = 1
-        
+
         if signal[i-1] == high_value and signal[i] == low_value:
             high_to_low[i] = 1
 
@@ -145,7 +144,7 @@ num_bins = 10
 #     # i = 1
 
 
-# %% Frequency of switching, conditional on switching event occuring
+# %% Probability of switching, conditional on switching event occuring
 # i=0
 
 training_episode_folders = ['episode_0', 'episode_399']
@@ -207,7 +206,7 @@ for training_episode in training_episode_folders:
     plt.plot(binned_phiS,binned_h2l_prob, label='High to low')
     plt.plot(binned_phiS,binned_l2h_prob, label='Low to high')
     plt.xlabel('Stress Sector Proteome Fraction, $\phi_S$')
-    plt.ylabel('Frequency of Switching')
+    plt.ylabel('Probability of Switching')
     plt.legend()
     plt.show()
 
@@ -220,6 +219,84 @@ for training_episode in training_episode_folders:
         bbox_inches='tight'
     )
 
+# %% Frequency of switching, conditional on switching event occuring
+# i=0
+
+fig = plt.figure()
+training_episode_folders = ['episode_0', 'episode_399']
+alphas = [0.3,1]
+linestyles = ['--','-']
+
+for i,training_episode in enumerate(training_episode_folders):
+    t = []
+    cell = []
+    drug = []
+    phiR = []
+    phiS = []
+    low_to_high_ind = []
+    high_to_low_ind = []
+
+    # if i == 1:
+    #     print('stop')
+    #     continue
+
+    # cycle through each rep
+    for param in param_agent:
+        if param[1] != "12": # for now only considering T=12
+            continue
+
+        antibiotic_value = float(param[0])
+
+        folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
+        tcbk_list, _, _, _, cell_array, _ = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval, True)
+
+        # cycle through each evaluation
+        for tcbkrs in tcbk_list:
+            b = tcbkrs[2][warm_up_embed:]
+            low_to_high, high_to_low = detect_drug_switch(b)
+            low_to_high_ind.extend(low_to_high.tolist())
+            high_to_low_ind.extend(high_to_low.tolist())
+
+            t.extend(tcbkrs[0][warm_up_embed:].tolist())
+            cell.extend(tcbkrs[1][warm_up_embed:].tolist())
+            drug.extend(b.tolist())
+            phiR.extend(tcbkrs[4][warm_up_embed:].tolist())
+            phiS.extend(tcbkrs[5][warm_up_embed:].tolist())
+
+    df = pd.DataFrame({
+        't': t,
+        'pop size': cell,
+        'drug': drug,
+        'phiR': phiR,
+        'phiS': phiS,
+        'low to high':low_to_high_ind,
+        'high to low': high_to_low_ind})
+
+
+    df_phiS_sorted = df.sort_values(by='phiS')
+    df_phiS_sorted['bins'] = pd.qcut(df_phiS_sorted['phiS'], num_bins, labels=False)
+    # df_phiS_sorted['bins'] = pd.cut(df_phiS_sorted['phiS'], num_bins, labels=False)
+    binned_h2l_prob = df_phiS_sorted.groupby('bins')['high to low'].sum() / df_phiS_sorted['high to low'].sum()
+    binned_l2h_prob = df_phiS_sorted.groupby('bins')['low to high'].sum() / df_phiS_sorted['low to high'].sum()
+    binned_phiS = df_phiS_sorted.groupby('bins')['phiS'].mean()
+
+    plt.plot(binned_phiS,binned_h2l_prob, label='High to low', color='green', linestyle=linestyles[i], alpha=alphas[i])
+    plt.plot(binned_phiS,binned_l2h_prob, label='Low to high', color='orange', linestyle=linestyles[i], alpha=alphas[i])
+plt.xlabel('Stress Sector Proteome Fraction, $\phi_S$', fontsize=14)
+plt.ylabel('Probability of Switching', fontsize=14)
+plt.xticks(fontsize=13)
+plt.yticks(fontsize=13)
+plt.legend(fontsize=13)
+plt.show()
+
+out_name = BASE_PATH / "figures_pdf" / "phiS_combined.pdf"
+out_path = os.path.dirname(out_name)
+os.makedirs(out_path, exist_ok=True)
+fig.savefig(
+    out_name,
+    dpi = 300,
+    bbox_inches='tight'
+)
 
 # %% Probability of switching, conditional on switching event occuring, phiR
 
