@@ -7,7 +7,7 @@ import numpy as np
 from joblib import Parallel, delayed
 import copy
 from scipy import signal
-# import wandb
+import wandb
 # import pickle
 
 from agent.replaybuffer import ReplayBuffer
@@ -247,16 +247,16 @@ class CDQL(object):
         ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
         ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
         # log via wandb
-        # wandb.log({
-        #     "extinct_fraction": extinct_count/num_evals,
-        #     "ave_ext_rate": 1/ave_ext_time,
-        #     "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
-        #     "ave_corr_lag_kn0": ave_corr_lag_kn0,
-        #     "ave_max_cross_corr_U": ave_max_cross_corr_U,
-        #     "ave_corr_lag_U": ave_corr_lag_U,
-        #     "ave total reward": np.mean(sum_rewards_all),
-        #     "ave min Q1": ave_q1
-        # })
+        wandb.log({
+            "extinct_fraction": extinct_count/num_evals,
+            "ave_ext_rate": 1/ave_ext_time,
+            "ave_max_cross_corr_kn0": ave_max_cross_corr_kn0,
+            "ave_corr_lag_kn0": ave_corr_lag_kn0,
+            "ave_max_cross_corr_U": ave_max_cross_corr_U,
+            "ave_corr_lag_U": ave_corr_lag_U,
+            "ave total reward": np.mean(sum_rewards_all),
+            "ave min Q1": ave_q1
+        })
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
