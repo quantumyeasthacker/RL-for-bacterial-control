@@ -285,7 +285,7 @@ class Cell_Population(object):
                 if self.mutate:
                     # mutating each child with probability mu
                     mut_ind = np.random.rand(birth_check.sum()) < self.mutate_prob
-                    phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,self.phiSmax_sigma, size=mut_ind.sum()))
+                    phiSmax_children = np.random.normal(self.phiS_max, self.phiSmax_sigma, size=mut_ind.sum())
                     X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*self.scale)
 
                 species_stack[4,birth_check] = 0
