@@ -28,7 +28,7 @@ class Q(nn.Module):
 
 
 class Model(object):
-    def __init__(self, device, num_inputs, num_actions, learning_rate=1e-4):
+    def __init__(self, device, num_inputs, num_actions, learning_rate, tau):
         self.device = device
         self.num_inputs = num_inputs
         self.num_actions = num_actions
@@ -47,7 +47,7 @@ class Model(object):
 
         self._update(self.q_target_1, self.q_1)
         self._update(self.q_target_2, self.q_2)
-        self.tau = 0.005
+        self.tau = tau
         # self.grad_update_num = 0
     
     # def _smaller_weights_last_layer(self, network, scale):

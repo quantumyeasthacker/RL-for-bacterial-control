@@ -35,6 +35,8 @@ class CDQL(object):
         train_freq: int = 1,
         gradient_steps: int = 1,
         use_gpu: bool = False,
+        learning_rate: float = 1e-4,
+        network_update_rate: float = 0.005
     ) -> None:
         '''
         Args:
@@ -48,6 +50,8 @@ class CDQL(object):
             train_freq: frequency of training per step
             gradient_steps: number of gradient steps to take each update
             use_gpu: whether to use gpu
+            learning_rate: lr for updating Q networks based on Bellman residual
+            network_update_rate: update rate for target network
         '''
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
@@ -58,7 +62,9 @@ class CDQL(object):
         self.env = env
         self.model = Model(self.device,
                            num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation) + 1,
-                           num_actions = self.env.num_actions)
+                           num_actions = self.env.num_actions,
+                           learning_rate = learning_rate,
+                           tau = network_update_rate)
 
         # env = env_config.env_name(env_config, cell_config)
         # model = Model(self.device, num_inputs = env_config.delay_embed_len*
@@ -161,7 +167,7 @@ class CDQL(object):
             gradient_steps: number of gradient steps to take
         """
 
-        T_eps = 300 # 380, choosing how fast to move from exploration to exploitation
+        T_eps = 400 # choosing how fast to move from exploration to exploitation
         epsilon_list = np.arange(episodes)
         epsilon_list = (-np.log10(epsilon_list/T_eps + EPS)).clip(0.05, 1)
 
