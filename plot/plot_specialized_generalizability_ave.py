@@ -457,30 +457,21 @@ df_generalized_eval["extinction_frac"] = extinction_frac_list
 df_generalized_eval["extinction_rate"] = extinction_rate_list
 
 # %% ----- ----- ----- ----- gen v.s. special ----- ----- ----- ----- %% #
-# df_constant_sim_cst_app
-# df_constant_eval
-
-df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
-    get_best_row_extinct_rate, include_groups=True
-).reset_index(drop=True)
-# df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+df_constant_eval_app = df_constant_eval.groupby(
+    ["antibiotic_value", "nutrient_value", "delay_embed_len", "training_episode", "inst_combination"]
+)["eval_log_cell"].mean().reset_index()
 df_constant_eval_app = df_constant_eval_app.merge(df_constant_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_constant_eval_app["log_diff"] = df_constant_eval_app["sim_log_cell"] - df_constant_eval_app["eval_log_cell"]
 
-# df_varenv_sim_cst_app
-# df_varenv_eval
-
-df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False).apply(
-    get_best_row_extinct_rate, include_groups=True
-).reset_index(drop=True)
-# df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
+df_varenv_eval_app = df_varenv_eval.groupby(
+    ["antibiotic_value", "T_k0", "delay_embed_len", "training_episode", "inst_combination"]
+)["eval_log_cell"].mean().reset_index()
 df_varenv_eval_app = df_varenv_eval_app.merge(df_varenv_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_varenv_eval_app["log_diff"] = df_varenv_eval_app["sim_log_cell"] - df_varenv_eval_app["eval_log_cell"]
 
 df_sim_cst_app = pd.concat([df_varenv_sim_cst_app, df_constant_sim_cst_app])
 df_eval_app = pd.concat([df_constant_eval_app, df_varenv_eval_app], ignore_index=True)
 
-# %%
 df_eval_app_trained = df_eval_app.copy()
 df_eval_app_trained["trained_env"] = np.where(
     df_eval_app_trained['nutrient_value'].notna(),
@@ -488,27 +479,29 @@ df_eval_app_trained["trained_env"] = np.where(
     'T' + df_eval_app_trained['T_k0'].map('{:.0f}'.format)
 )
 
+# %%
 # df_special_gen_eval
 # df_constant_sim_cst_app
 # df_varenv_sim_cst_app
 
-df_constant_eval_app_selected = df_constant_eval_app.copy()
-df_constant_eval_app_selected["trained_env"] = df_constant_eval_app_selected["nutrient_value"].map(lambda x: f"n{x:.2f}")
-df_constant_eval_app_selected = df_constant_eval_app_selected[["trained_env", "rep"]]
+# df_constant_eval_app_selected = df_constant_eval_app.copy()
+# df_constant_eval_app_selected["trained_env"] = df_constant_eval_app_selected["nutrient_value"].map(lambda x: f"n{x:.2f}")
+# df_constant_eval_app_selected = df_constant_eval_app_selected[["trained_env", "rep"]]
 
-df_varenv_eval_app_selected = df_varenv_eval_app.copy()
-df_varenv_eval_app_selected["trained_env"] = df_varenv_eval_app_selected["T_k0"].map(lambda x: f"T{x}")
-df_varenv_eval_app_selected = df_varenv_eval_app_selected[["trained_env", "rep"]]
+# df_varenv_eval_app_selected = df_varenv_eval_app.copy()
+# df_varenv_eval_app_selected["trained_env"] = df_varenv_eval_app_selected["T_k0"].map(lambda x: f"T{x}")
+# df_varenv_eval_app_selected = df_varenv_eval_app_selected[["trained_env", "rep"]]
 
-# concatenate the selected dataframes with no index
-df_special_gen_selected = pd.concat([df_constant_eval_app_selected, df_varenv_eval_app_selected], ignore_index=True)
+# # concatenate the selected dataframes with no index
+# df_special_gen_selected = pd.concat([df_constant_eval_app_selected, df_varenv_eval_app_selected], ignore_index=True)
 
-# sum_df = df_special_gen_eval.groupby(["trained_env", "rep"])["eval_log_cell"].sum().reset_index()
-# min_rep = sum_df.loc[sum_df.groupby(["trained_env"])["eval_log_cell"].idxmin()]
-# if isinstance(min_rep, pd.Series):
-#     min_rep = min_rep.to_frame().T
+# df_special_gen_eval_app = df_special_gen_eval.merge(df_special_gen_selected[['trained_env', 'rep']], on=['trained_env', 'rep'])
 
-df_special_gen_eval_app = df_special_gen_eval.merge(df_special_gen_selected[['trained_env', 'rep']], on=['trained_env', 'rep'])
+df_special_gen_eval_app = df_special_gen_eval.groupby(
+    ["antibiotic_value", "trained_env", "delay_embed_len", "training_episode", "inst_combination"]
+)["eval_log_cell"].mean().reset_index()
+
+
 df_special_gen_eval_app["inst_combination"] = df_special_gen_eval_app["inst_combination"].str.replace(r'^(constenv_\d+)$', r'\1.00', regex=True)
 
 df_special_gen_eval_app = df_special_gen_eval_app.merge(df_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
@@ -516,56 +509,34 @@ df_special_gen_eval_app["log_diff"] = df_special_gen_eval_app["sim_log_cell"] - 
 
 # %%
 df_generalized_eval_app = df_generalized_eval[df_generalized_eval["episodes"] == 400].reset_index(drop=True)
-sum_df = df_generalized_eval_app.groupby(["episodes", "rep"])["eval_log_cell"].sum().reset_index()
-min_rep = sum_df.loc[sum_df["eval_log_cell"].idxmin()]
-if isinstance(min_rep, pd.Series):
-    min_rep = min_rep.to_frame().T
-df_generalized_eval_app = df_generalized_eval_app.merge(min_rep[['episodes', 'rep']], on=['episodes', 'rep'])
+# sum_df = df_generalized_eval_app.groupby(["episodes", "rep"])["eval_log_cell"].sum().reset_index()
+# min_rep = sum_df.loc[sum_df["eval_log_cell"].idxmin()]
+# if isinstance(min_rep, pd.Series):
+#     min_rep = min_rep.to_frame().T
+# df_generalized_eval_app = df_generalized_eval_app.merge(min_rep[['episodes', 'rep']], on=['episodes', 'rep'])
 
-# df_generalized_eval_app = df_generalized_eval.groupby("inst_combination", group_keys=False).apply(
-#     get_best_row_extinct_rate, include_groups=True
-# ).reset_index(drop=True)
+df_generalized_eval_app = df_generalized_eval_app.groupby(
+    ["antibiotic_value", "trained_env", "delay_embed_len", "training_episode", "inst_combination"]
+)["eval_log_cell"].mean().reset_index()
 
 df_generalized_eval_app["inst_combination"] = df_generalized_eval_app["inst_combination"].str.replace(r'^(constenv_\d+)$', r'\1.00', regex=True)
 
 df_generalized_eval_app = df_generalized_eval_app.merge(df_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
 df_generalized_eval_app["log_diff"] = df_generalized_eval_app["sim_log_cell"] - df_generalized_eval_app["eval_log_cell"]
 
-# %% ----- ----- ----- ----- plot gen v.s. special (scatter) ----- ----- ----- ----- %% #
-# fig, ax = plt.subplots(figsize=(10, 6))
-
-# sns.lineplot(data=df_special_gen_eval_app, x='inst_combination', y='log_diff', label = "special_gen Agents", marker='o', linestyle='-')
-
-# ax.scatter(df_eval_app['inst_combination'], df_eval_app['log_diff'], color='black', marker='x', label='Specialized Agents')
-
-# # Labels and title
-# # ax.set_xticks(sorted(df_eval_select['eval_combination'].unique()))
-
-# ax.set_xlabel("Evaluation")
-# ax.set_ylabel(r'$\log_{population\ size}$(constant application) - $\log_{population\ size}$(agent)')
-# ax.set_title("Comparison of special_gen and Specialized Agents (Trained on corresponding env)")
-
-# # Update legend: Add a separate entry for the special_gen agents
-# ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-# ax.grid(True)
-
-# # Show the plot
-# fig.savefig("figures_jpg/special_gen_Specialized_const.jpg", dpi=600, bbox_inches='tight')
-
 # %% ----- ----- ----- ----- plot gen v.s. special (bar) ----- ----- ----- ----- %% #
-df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "log_diff", "eval_log_cell_std"]].copy()
+df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "log_diff"]].copy()
 df1["source"] = "Single-env agent " + df1["trained_env"]
 # df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
 # COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-df2 = df_eval_app_trained[["trained_env", "inst_combination", "log_diff", "eval_log_cell_std"]].copy()
+df2 = df_eval_app_trained[["trained_env", "inst_combination", "log_diff"]].copy()
 # df2["source"] = "Specialized Agents"
 df2["source"] = "Single-env agent " + df2["trained_env"]
 # df2["color"] = "#17becf"
-df3 = df_generalized_eval_app[["trained_env", "inst_combination", "log_diff", "eval_log_cell_std"]].copy()
+df3 = df_generalized_eval_app[["trained_env", "inst_combination", "log_diff"]].copy()
 df3["source"] = "Multi-env agent"
 
 combined_df = pd.concat([df1, df2, df3], ignore_index=True)
-combined_df.rename(columns={'eval_log_cell_std': 'std'}, inplace=True)
 combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
 
 #####
@@ -636,32 +607,6 @@ for i, patch in enumerate(ax.patches):
     patch.set_edgecolor('black')
     patch.set_linewidth(1.5)
 
-# for name, group in combined_df.groupby(['inst_combination', 'source']):
-#     x = list(plot_order).index(name[0])
-#     source_offset = {
-#         'Agents n1.00': -0.35,
-#         'Agents n2.00': -0.25,
-#         'Agents n3.00': -0.15,
-#         'Agents n4.00': -0.05,
-#         'Agents T12': 0.05,
-#         'Agents T18': 0.15,
-#         'Agents T24': 0.25,
-#         'Agents T6': 0.35,
-#     }[name[1]]
-#     x_pos = x + source_offset
-#     mean_val = group['log_diff'].values[0]
-#     std_val = group['std'].values[0]
-#     ax.errorbar(x_pos, mean_val, yerr=std_val, fmt='none', c='black', capsize=5)
-
-#     ax.text(
-#         x_pos,
-#         mean_val + std_val + 0.03,  # small vertical padding
-#         f'{mean_val:.2f}',
-#         ha='center',
-#         va='bottom',
-#         fontsize=9
-#     )
-
 ax.set_title('Generalizability of Specialized Agents')
 ax.set_xlabel('Evaluation environment')
 # ax.set_ylabel(r'$\Delta \log(population\ size)$')
@@ -670,145 +615,5 @@ ax.set_ylabel(r'Relative performance')
 ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.xticks(rotation=45)
 fig.tight_layout()
-fig.savefig(BASE_PATH / "figures_jpg" / "special_gen.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / "special_gen.pdf", dpi=600, bbox_inches='tight')
-
-# %% ----- ----- ----- ----- plot gen v.s. special (extinction fraq) ----- ----- ----- ----- %% #
-df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "extinction_frac"]].copy()
-df1["source"] = "Agents " + df1["trained_env"]
-# df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-# COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-df2 = df_eval_app_trained[["trained_env", "inst_combination", "extinction_frac"]].copy()
-# df2["source"] = "Specialized Agents"
-df2["source"] = "Agents " + df2["trained_env"]
-# df2["color"] = "#17becf"
-
-fig, ax = plt.subplots(figsize=(10, 6))
-
-combined_df = pd.concat([df1, df2])
-combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
-
-# text replacement for inst_combination
-mapping = {"constenv_1.00": "n1.00", "constenv_2.00": "n2.00", "constenv_3.00": "n3.00", "constenv_4.00": "n4.00",
-           "varenv_6": "T6", "varenv_12": "T12", "varenv_18": "T18", "varenv_24": "T24"}
-combined_df['inst_combination'] = combined_df['inst_combination'].replace(mapping)
-# plot_order = np.unique(combined_df['inst_combination'])
-
-inst_order = ["n1.00", "n2.00", "n3.00", "n4.00", "T6", "T12", "T18", "T24"]
-agent_order = ["Agents n1.00", "Agents n2.00", "Agents n3.00", "Agents n4.00",
-               "Agents T6", "Agents T12", "Agents T18", "Agents T24"]
-
-combined_df["inst_combination"] = pd.Categorical(
-    combined_df["inst_combination"],
-    categories=inst_order,
-    ordered=True
-)
-combined_df["source"] = pd.Categorical(
-    combined_df["source"],
-    categories=agent_order,
-    ordered=True
-)
-combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
-
-sns.barplot(
-    data=combined_df,
-    x='inst_combination',
-    y='extinction_frac',
-    order=inst_order,
-    gap=0.15,
-    hue='source',
-    errorbar=('ci', None),  # disable automatic CI bars
-    err_kws={'linewidth': 1},
-    capsize=0.1
-)
-ax.axhline(0, color='gray', linewidth=1, linestyle='--')
-# for container in ax.containers:
-#     ax.bar_label(container, fmt='%.2f', padding=3)
-box_list = [i*9 for i in range(8)]
-for i, patch in enumerate(ax.patches):
-    if i not in box_list:
-        continue
-    patch.set_edgecolor('black')
-    patch.set_linewidth(1.5)
-
-ax.set_title('Generalizability of Specialized Agents')
-ax.set_xlabel('Evaluation environment')
-# ax.set_ylabel(r'$\Delta \log(population\ size)$')
-# ax.set_ylabel(r'$\log(P_{constant})-\log(P_{pulsing})$')
-ax.set_ylabel(r'Extinction Probability')
-ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.xticks(rotation=45)
-fig.tight_layout()
-fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct.pdf", dpi=600, bbox_inches='tight')
-
-# %% ----- ----- ----- ----- plot gen v.s. special (extinction rate) ----- ----- ----- ----- %% #
-df1 = df_special_gen_eval_app[["trained_env", "inst_combination", "extinction_rate"]].copy()
-df1["source"] = "Agents " + df1["trained_env"]
-# df1["color"] = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-# COLOR_LIST = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-df2 = df_eval_app_trained[["trained_env", "inst_combination", "extinction_rate"]].copy()
-# df2["source"] = "Specialized Agents"
-df2["source"] = "Agents " + df2["trained_env"]
-# df2["color"] = "#17becf"
-
-fig, ax = plt.subplots(figsize=(10, 6))
-
-combined_df = pd.concat([df1, df2])
-combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
-
-# text replacement for inst_combination
-mapping = {"constenv_1.00": "n1.00", "constenv_2.00": "n2.00", "constenv_3.00": "n3.00", "constenv_4.00": "n4.00",
-           "varenv_6": "T6", "varenv_12": "T12", "varenv_18": "T18", "varenv_24": "T24"}
-combined_df['inst_combination'] = combined_df['inst_combination'].replace(mapping)
-# plot_order = np.unique(combined_df['inst_combination'])
-
-inst_order = ["n1.00", "n2.00", "n3.00", "n4.00", "T6", "T12", "T18", "T24"]
-agent_order = ["Agents n1.00", "Agents n2.00", "Agents n3.00", "Agents n4.00",
-               "Agents T6", "Agents T12", "Agents T18", "Agents T24"]
-
-combined_df["inst_combination"] = pd.Categorical(
-    combined_df["inst_combination"],
-    categories=inst_order,
-    ordered=True
-)
-combined_df["source"] = pd.Categorical(
-    combined_df["source"],
-    categories=agent_order,
-    ordered=True
-)
-combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
-
-sns.barplot(
-    data=combined_df,
-    x='inst_combination',
-    y='extinction_rate',
-    order=inst_order,
-    gap=0.15,
-    hue='source',
-    errorbar=('ci', None),  # disable automatic CI bars
-    err_kws={'linewidth': 1},
-    capsize=0.1
-)
-ax.axhline(0, color='gray', linewidth=1, linestyle='--')
-# for container in ax.containers:
-#     ax.bar_label(container, fmt='%.2f', padding=3)
-box_list = [i*9 for i in range(8)]
-for i, patch in enumerate(ax.patches):
-    if i not in box_list:
-        continue
-    patch.set_edgecolor('black')
-    patch.set_linewidth(1.5)
-
-ax.set_title('Generalizability of Specialized Agents')
-ax.set_xlabel('Evaluation environment')
-# ax.set_ylabel(r'$\Delta \log(population\ size)$')
-# ax.set_ylabel(r'$\log(P_{constant})-\log(P_{pulsing})$')
-ax.set_ylabel(r'Extinction rate')
-ax.legend(title="Agent Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.xticks(rotation=45)
-fig.tight_layout()
-fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_extinct_rate.jpg", dpi=600, bbox_inches='tight')
-fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_extinct_rate.pdf", dpi=600, bbox_inches='tight')
-
-# %%
+fig.savefig(BASE_PATH / "figures_jpg" / "special_gen_mean.jpg", dpi=600, bbox_inches='tight')
+fig.savefig(BASE_PATH / "figures_pdf" / "special_gen_mean.pdf", dpi=600, bbox_inches='tight')
