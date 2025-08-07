@@ -515,16 +515,16 @@ df_special_gen_eval_app = df_special_gen_eval_app.merge(df_sim_cst_app[["inst_co
 df_special_gen_eval_app["log_diff"] = df_special_gen_eval_app["sim_log_cell"] - df_special_gen_eval_app["eval_log_cell"]
 
 # %%
-# df_eval_app = pd.concat([df_constant_eval_app, df_varenv_eval_app], ignore_index=True)
+df_generalized_eval_app = df_generalized_eval[df_generalized_eval["episodes"] == 400].reset_index(drop=True)
+sum_df = df_generalized_eval_app.groupby(["episodes", "rep"])["eval_log_cell"].sum().reset_index()
+min_rep = sum_df.loc[sum_df["eval_log_cell"].idxmin()]
+if isinstance(min_rep, pd.Series):
+    min_rep = min_rep.to_frame().T
+df_generalized_eval_app = df_generalized_eval_app.merge(min_rep[['episodes', 'rep']], on=['episodes', 'rep'])
 
-# sum_df = df_generalized_eval.groupby(["episodes", "rep"])["eval_log_cell"].sum().reset_index()
-# min_rep = sum_df.loc[sum_df["eval_log_cell"].idxmin()]
-# if isinstance(min_rep, pd.Series):
-#     min_rep = min_rep.to_frame().T
-# df_generalized_eval_app = df_generalized_eval.merge(min_rep[['episodes', 'rep']], on=['episodes', 'rep'])
-df_generalized_eval_app = df_generalized_eval.groupby("inst_combination", group_keys=False).apply(
-    get_best_row_extinct_rate, include_groups=True
-).reset_index(drop=True)
+# df_generalized_eval_app = df_generalized_eval.groupby("inst_combination", group_keys=False).apply(
+#     get_best_row_extinct_rate, include_groups=True
+# ).reset_index(drop=True)
 
 df_generalized_eval_app["inst_combination"] = df_generalized_eval_app["inst_combination"].str.replace(r'^(constenv_\d+)$', r'\1.00', regex=True)
 
