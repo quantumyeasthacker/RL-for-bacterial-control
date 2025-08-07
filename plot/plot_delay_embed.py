@@ -109,7 +109,7 @@ max_pop: int = int(1e11)
 
 # %% ----- ----- ----- ----- generalized eval else ----- ----- ----- ----- %% #
 env_type = "generalized"
-param_file = BASE_PATH / "param_space" / f"param_agent_delays_{env_type}_eval_all.txt"
+param_file = BASE_PATH / "param_space" / f"param_agent_delays_{env_type}_eval_more.txt"
 eval_folder = BASE_PATH / f"results_delays_record_{env_type}_eval"
 # eval_folder = BASE_PATH / "20250421_generalized" / eval_folder
 
@@ -183,27 +183,44 @@ df_generalized_eval_else["extinction_frac"] = extinction_frac_list
 df_generalized_eval_else["extinction_rate"] = extinction_rate_list
 
 
-# %%
+# %% ave extinction rate v.s. history length
+# df_embed = df_generalized_eval_else.copy()
+# # df_embed = pd.concat([df_generalized_eval, df_generalized_eval_else], ignore_index=True)
+# df_embed = df_embed.sort_values(by=["delay_embed_len", "rep", "inst_combination"]).reset_index(drop=True)
+
+# sum_df = df_embed.groupby(["delay_embed_len", "rep"])["extinction_rate"].mean().reset_index()
+# gen_rep = sum_df.loc[sum_df.groupby(["delay_embed_len"])["extinction_rate"].idxmax()]
+
+# if isinstance(gen_rep, pd.Series):
+#     gen_rep = gen_rep.to_frame().T
+
+# # df_embed_app = df_embed.merge(gen_rep[['delay_embed_len', 'rep']], on=['delay_embed_len', 'rep'])
+# # df_embed_app["inst_combination"] = df_embed_app["inst_combination"].str.replace(r'^(constenv_\d+)$', r'\1.00', regex=True)
+
+# plt.figure(figsize=(8, 6))
+# plt.plot(gen_rep["delay_embed_len"], gen_rep["extinction_rate"], marker='o')
+# plt.xlabel("History Length")
+# plt.ylabel("Average extinction rate")
+
+# plt.savefig(BASE_PATH / "figures_pdf" / "extinction_rate_vs_history_length.pdf", bbox_inches='tight')
+# plt.savefig(BASE_PATH / "figures_jpg" / "extinction_rate_vs_history_length.jpg", bbox_inches='tight')
+
+# plt.show()
+
+# %% ave extinction rate v.s. episodes
 df_embed = df_generalized_eval_else.copy()
-# df_embed = pd.concat([df_generalized_eval, df_generalized_eval_else], ignore_index=True)
-df_embed = df_embed.sort_values(by=["delay_embed_len", "rep", "inst_combination"]).reset_index(drop=True)
+df_embed = df_embed.sort_values(by=["delay_embed_len", "training_episode", "inst_combination"]).reset_index(drop=True)
 
-# %%
-sum_df = df_embed.groupby(["delay_embed_len", "rep"])["extinction_rate"].mean().reset_index()
-gen_rep = sum_df.loc[sum_df.groupby(["delay_embed_len"])["extinction_rate"].idxmax()]
+sum_df = df_embed.groupby(["delay_embed_len", "training_episode"])["extinction_rate"].mean().reset_index()
+sum_df["training_episode_int"] = sum_df["training_episode"].apply(lambda x: int(x.split("_")[1]))
 
-if isinstance(gen_rep, pd.Series):
-    gen_rep = gen_rep.to_frame().T
-
-# df_embed_app = df_embed.merge(gen_rep[['delay_embed_len', 'rep']], on=['delay_embed_len', 'rep'])
-# df_embed_app["inst_combination"] = df_embed_app["inst_combination"].str.replace(r'^(constenv_\d+)$', r'\1.00', regex=True)
-
-plt.figure(figsize=(8, 6))
-plt.plot(gen_rep["delay_embed_len"], gen_rep["extinction_rate"], marker='o')
-plt.xlabel("History Length")
-plt.ylabel("Average extinction rate")
-
-plt.savefig(BASE_PATH / "figures_pdf" / "extinction_rate_vs_history_length.pdf", bbox_inches='tight')
-plt.savefig(BASE_PATH / "figures_jpg" / "extinction_rate_vs_history_length.jpg", bbox_inches='tight')
+fig, ax = plt.subplots(figsize=(8, 6))
+sns.lineplot(data=sum_df, x="training_episode_int", y="extinction_rate",
+                hue="delay_embed_len", marker='o', ax=ax)
+plt.xlabel("Training Episodes")
+plt.ylabel("Average Extinction Rate")
+plt.legend(title="History Length")
+plt.savefig(BASE_PATH / "figures_pdf" / "extinction_rate_vs_training_episodes.pdf", bbox_inches='tight')
+plt.savefig(BASE_PATH / "figures_jpg" / "extinction_rate_vs_training_episodes.jpg", bbox_inches='tight')
 
 # %%

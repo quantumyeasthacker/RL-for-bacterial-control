@@ -98,7 +98,7 @@ for param in param_agent:
     out_name = BASE_PATH / "figures_pdf" / "constant_nutrient" / "eval" / f"a{param[0]}_n{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
     plot_single(loaded_logger, out_name, color_map[nutrient_value], True)
 
-# %% ----- ----- ----- ----- varenv sim (constant) ----- ----- ----- ----- %% #
+# %% ----- ----- ----- ----- varenv sim ----- ----- ----- ----- %% #
 colors_baby_blue = ["#89CFF0", "#60BEEB", "#38AEE6", "#1B99D4", "#167CAC", "#115E83", "#0B415A"]
 colors_baby_blue = colors_baby_blue[::-2]
 env_type = "varenv"
@@ -129,7 +129,8 @@ for param in param_sim:
     plot_single(loaded_logger, out_name, "#548c6a", True, True)
     # plot_single_separate(loaded_logger, out_name, colors_baby_blue[0], False, True, warm_up_embed = warm_up_embed)
 
-    # out_name = BASE_PATH / "figures_pdf" / "var_nutrient_separate" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
+    out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / f"a{param[2]}_T{param[3]}_value_check" / f"{param[1]}_{param[0]}.pdf"
+    plot_single(loaded_logger, out_name, "#548c6a", True, True)
     # plot_single_separate(loaded_logger, out_name, colors_baby_blue[0], False, True, warm_up_embed = warm_up_embed)
 
 # %% ----- ----- ----- ----- varenv eval ----- ----- ----- ----- %% #
@@ -151,18 +152,19 @@ param_agent = [x.split(" ") for x in param_agent]
 for param in param_agent:
     antibiotic_value = float(param[0])
     training_episode = param[4]
-    if param[1] != "12":
-        continue
+    # if param[1] != "12":
+    #     continue
     
     folder_name = eval_folder / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}" / training_episode
     loaded_logger = load_logger_data_new(folder_name, sim_length, max_pop, n_trials_eval)
 
-    out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
-    plot_single_varenv(loaded_logger, out_name, colors_baby_blue, n_trials_eval)
-    # plot_single(loaded_logger, out_name, "#548c6a", True, True)
-
-    # out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    out_name = BASE_PATH / "figures_jpg" / "var_nutrient" / "eval_more" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.jpg"
     # plot_single_varenv(loaded_logger, out_name, colors_baby_blue, n_trials_eval)
+    plot_single(loaded_logger, out_name, "#548c6a", True, True)
+
+    out_name = BASE_PATH / "figures_pdf" / "var_nutrient" / "eval_more" / f"a{param[0]}_T{param[1]}_delay{param[2]}_rep{param[3]}.pdf"
+    # plot_single_varenv(loaded_logger, out_name, colors_baby_blue, n_trials_eval)
+    plot_single(loaded_logger, out_name, "#548c6a", True, True)
 
 # %% ----- ----- ----- ----- specialized agents generalizability check in use ----- ----- ----- ----- %% #
 # colors_baby_blue = ["#89CFF0", "#60BEEB", "#38AEE6", "#1B99D4", "#167CAC", "#115E83", "#0B415A"]

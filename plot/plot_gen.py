@@ -647,7 +647,7 @@ for i_T_k0, T_k0 in enumerate(T_k0_list):
 
 for i_T_k0, T_k0 in enumerate(T_k0_list):
     eval_entry = df_varenv_eval_app[(df_varenv_eval_app["T_k0"] == T_k0)]
-    x = eval_entry["extinction_rate"].to_numpy()
+    x = eval_entry["eval_freq"].to_numpy()
     y = eval_entry["extinction_rate"].to_numpy()
     y_std = eval_entry["extinction_rate_std"].to_numpy()
     
@@ -665,5 +665,12 @@ ax.legend(loc = "upper left", bbox_to_anchor=(1, 1), fontsize = 10, title="T_k0"
 fig.tight_layout()
 fig.savefig(BASE_PATH / "figures_jpg" / "varenv_special_threshold_45-modified.jpg", dpi=600, bbox_inches='tight')
 fig.savefig(BASE_PATH / "figures_pdf" / "varenv_special_threshold_45-modified.pdf", dpi=600, bbox_inches='tight')
+
+# %%
+df_varenv_sim_test = df_varenv_sim[df_varenv_sim["T_k0"] == 12]
+# df_varenv_eval_app_test = df_varenv_eval_app[df_varenv_eval_app["T_k0"] == 12]
+# df_varenv_sim_test
+print(df_varenv_sim_test.loc[df_varenv_sim_test["extinction_rate"].idxmax()])
+# print(df_varenv_sim_test.loc[(df_varenv_sim_test["sim_freq"] - df_varenv_eval_app_test["eval_freq"].item()).idxmin()])
 
 # %%

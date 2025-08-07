@@ -29,7 +29,7 @@ def get_best_row(group):
 
 def get_best_row_extinct_rate(group):
     # Filter to extinction_frac == 1
-    extinct = group[group["extinction_frac"] == 1]
+    extinct = group[group["extinction_frac"] >= 0.95]
     if not extinct.empty:
         # Pick the row with min eval_log_cell among extinct
         return extinct.loc[extinct["extinction_rate"].idxmax()]
@@ -137,7 +137,12 @@ def plot_single(
     # folder_name = f"{sim_folder}/a{antibiotic_value:.2f}_n{nutrient_value:.2f}_value_check/{initialize_app}_{half_period}/"
     tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
     # cell_ave = np.mean(cell_array, axis=0)
-    
+
+    max_id = 0
+    for j in range(20):
+        if len(tcbk_list[j][0]) > len(tcbk_list[max_id][0]):
+            max_id = j
+
     figure, ax = plt.subplots(5,1)
     figure.subplots_adjust(hspace=.0)
     ax_num = 0
@@ -145,7 +150,7 @@ def plot_single(
     if more_antibiotic:
         for j in range(20):
             ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][2], color='gray', alpha=0.3, linewidth=1)
-    ax[ax_num].plot(t,b, color=ANTIBIOTIC_COLOR)
+    ax[ax_num].plot(tcbk_list[max_id][0], tcbk_list[max_id][2], color=ANTIBIOTIC_COLOR)
     ax[ax_num].set_ylabel('Antibiotic')
     ax[ax_num].get_xaxis().set_ticks([])
     # ax[ax_num].axvline(x=delta_t*embed_len, linestyle='--', color='k')
@@ -154,7 +159,7 @@ def plot_single(
     if more_nutrient:
         for j in range(20):
             ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][3], color='gray', alpha=0.3, linewidth=1)
-    ax[ax_num].plot(t, k_n0, color=color_nut)
+    ax[ax_num].plot(tcbk_list[max_id][0], tcbk_list[max_id][3], color=color_nut)
     ax[ax_num].set_ylabel('Nutrient')
     ax[ax_num].get_xaxis().set_ticks([])
     # ax[ax_num].axvline(x=delta_t*embed_len, linestyle='--', color='k')
@@ -163,7 +168,7 @@ def plot_single(
     for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
         ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color='gray', alpha=0.3, linewidth=1)
     # ax[ax_num].plot(t, cell_ave[:len(t)], color=color_nut)
-    ax[ax_num].plot(t, tcbk_list[max_id][4], color="black")
+    ax[ax_num].plot(tcbk_list[max_id][0,:-1], tcbk_list[max_id][4,:-1], color="black")
     ax[ax_num].set_ylabel(r'$\phi_R$')
     ax[ax_num].set_ylim(bottom=-0.1, top=0.45)
     # ax[ax_num].set_xlabel('Time (h)')
@@ -174,7 +179,7 @@ def plot_single(
     for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
         ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color='gray', alpha=0.3, linewidth=1)
     # ax[ax_num].plot(t, cell_ave[:len(t)], color=color_nut)
-    ax[ax_num].plot(t, tcbk_list[max_id][5], color="black")
+    ax[ax_num].plot(tcbk_list[max_id][0,:-1], tcbk_list[max_id][5,:-1], color="black")
     ax[ax_num].set_ylabel(r'$\phi_S$')
     ax[ax_num].set_ylim(bottom=-0.1, top=0.35)
     # ax[ax_num].set_xlabel('Time (h)')
@@ -185,7 +190,7 @@ def plot_single(
     for j in range(20):  # Choose a subset (e.g., 20 out of 100) for shadow effect
         ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][1], color='gray', alpha=0.3, linewidth=1)
     # ax[ax_num].plot(t, cell_ave[:len(t)], color=POP_SIZE_COLOR)
-    ax[ax_num].plot(t, tcbk_list[max_id][1], color=POP_SIZE_COLOR)
+    ax[ax_num].plot(tcbk_list[max_id][0], tcbk_list[max_id][1], color=POP_SIZE_COLOR)
     ax[ax_num].set_ylabel(r'$P$')
     ax[ax_num].set_xlabel('Time (h)')
     ax[ax_num].set_yscale('log')
@@ -218,7 +223,7 @@ def plot_single_varenv(
         np.random.seed(1)
         choices = np.random.choice(n_trials, 3)
 
-    figure, ax = plt.subplots(3,1,figsize=(6.4, 4.8))
+    figure, ax = plt.subplots(5, 1)
     figure.subplots_adjust(hspace=.0)
     ax_num = 0
     # ax[0].set_title(f"antibiotic conc. max = {antibiotic_value}, nutrient conc. = {nutrient_value}")
@@ -226,7 +231,7 @@ def plot_single_varenv(
         ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
     ax[ax_num].set_ylabel('Antibiotic')
     ax[ax_num].get_xaxis().set_ticks([])
-    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
     # ax[ax_num].axvline(x=72, color='white')
 
     ax_num += 1
@@ -234,26 +239,26 @@ def plot_single_varenv(
         ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
     ax[ax_num].set_ylabel('Nutrient')
     ax[ax_num].get_xaxis().set_ticks([])
-    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
     # ax[ax_num].axvline(x=72, color='white')
 
-    # ax_num += 1
-    # for i_c, j in enumerate(choices):
-    #     ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color=line_color_list[i_c])
-    # ax[ax_num].set_ylabel(r'$\phi_R$')
-    # ax[ax_num].set_ylim(bottom=-0.1, top=0.45)
-    # # ax[ax_num].set_xlabel('Time (h)')
-    # ax[ax_num].get_xaxis().set_ticks([])
-    # # ax[ax_num].set_yscale('log')
+    ax_num += 1
+    for i_c, j in enumerate(choices):
+        ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][4,:-1], color=line_color_list[i_c])
+    ax[ax_num].set_ylabel(r'$\phi_R$')
+    ax[ax_num].set_ylim(bottom=-0.1, top=0.45)
+    # ax[ax_num].set_xlabel('Time (h)')
+    ax[ax_num].get_xaxis().set_ticks([])
+    # ax[ax_num].set_yscale('log')
 
-    # ax_num += 1
-    # for i_c, j in enumerate(choices):
-    #     ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color=line_color_list[i_c])
-    # ax[ax_num].set_ylabel(r'$\phi_S$')
-    # ax[ax_num].set_ylim(bottom=-0.1, top=0.35)
-    # # ax[ax_num].set_xlabel('Time (h)')
-    # ax[ax_num].get_xaxis().set_ticks([])
-    # # ax[ax_num].set_yscale('log')
+    ax_num += 1
+    for i_c, j in enumerate(choices):
+        ax[ax_num].plot(tcbk_list[j][0,:-1], tcbk_list[j][5,:-1], color=line_color_list[i_c])
+    ax[ax_num].set_ylabel(r'$\phi_S$')
+    ax[ax_num].set_ylim(bottom=-0.1, top=0.35)
+    # ax[ax_num].set_xlabel('Time (h)')
+    ax[ax_num].get_xaxis().set_ticks([])
+    # ax[ax_num].set_yscale('log')
 
     ax_num += 1
     for i_c, j in enumerate(choices):
@@ -261,7 +266,7 @@ def plot_single_varenv(
     ax[ax_num].set_ylabel(r'$P$')
     ax[ax_num].set_xlabel('Time (h)')
     ax[ax_num].set_yscale('log')
-    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
     # ax[ax_num].axvline(x=72, color='white')
 
     # out_path = "figures/a%.2f_n%.2f_value_check/"%(antibiotic_value, nutrient_value)
@@ -405,12 +410,64 @@ def plot_one_traj(
         plt.close(figure)
 
 
-def plot_single_trunc(
+# def plot_single_trunc(
+#         loaded_logger,
+#         out_name,
+#         line_color_list = None,
+#         n_trials = 100,
+#         choices = None,
+# ):
+#     tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
+    
+#     if choices is None:
+#         np.random.seed(1)
+#         choices = np.random.choice(n_trials, 3)
+
+#     figure = plt.figure(figsize=(6.4, 4.8))
+#     sps1, sps2, sps3 = GridSpec(3,1)
+#     figure.subplots_adjust(hspace=.0)
+
+#     # figure, ax = plt.subplots(3,1,figsize=([6.4, 4.8]))
+#     # figure.subplots_adjust(hspace=.0)
+#     bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps1)
+#     for i_c, j in enumerate(choices):
+#         bax.plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
+#     bax.set_ylabel('Antibiotic')
+#     bax.axvline(x=t[61-1], linestyle='--', color='k')
+#     for ax in bax.axs:  # bax.axs is a 2D array of Axes
+#         ax.get_xaxis().set_ticks([])
+#     # ax[ax_num].axvline(x=72, color='white')
+
+#     bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps2)
+#     for i_c, j in enumerate(choices):  # Choose a subset (e.g., 20 out of 100) for shadow effect
+#         bax.plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
+#     bax.set_ylabel('Nutrient')
+#     bax.axvline(x=t[61-1], linestyle='--', color='k')
+#     for ax in bax.axs:  # bax.axs is a 2D array of Axes
+#         ax.get_xaxis().set_ticks([])
+
+#     bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps3)
+#     for i_c, j in enumerate(choices):
+#         bax.plot(tcbk_list[j][0], tcbk_list[j][1], color=line_color_list[i_c])
+#     bax.set_ylabel(r'$P$')
+#     bax.set_xlabel('Time (h)')
+#     bax.set_yscale('log')
+#     bax.axvline(x=t[61-1], linestyle='--', color='k')
+
+#     out_path = os.path.dirname(out_name)
+#     os.makedirs(out_path, exist_ok=True)
+
+#     figure.savefig(out_name, dpi=300, bbox_inches='tight')
+#     plt.close(figure)
+
+def plot_single_control(
         loaded_logger,
         out_name,
         line_color_list = None,
         n_trials = 100,
         choices = None,
+        figure_size=(6.4, 4.8),
+        xlim = [0,40],
 ):
     tcbk_list, t, b, k_n0, cell_array, (_, max_id, _) = loaded_logger
     
@@ -418,38 +475,43 @@ def plot_single_trunc(
         np.random.seed(1)
         choices = np.random.choice(n_trials, 3)
 
-    figure = plt.figure(figsize=(6.4, 4.8))
-    sps1, sps2, sps3 = GridSpec(3,1)
+    figure, ax = plt.subplots(3,1,figsize=figure_size)
     figure.subplots_adjust(hspace=.0)
-
-    # figure, ax = plt.subplots(3,1,figsize=([6.4, 4.8]))
-    # figure.subplots_adjust(hspace=.0)
-    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps1)
+    ax_num = 0
     for i_c, j in enumerate(choices):
-        bax.plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
-    bax.set_ylabel('Antibiotic')
-    bax.axvline(x=t[61-1], linestyle='--', color='k')
-    for ax in bax.axs:  # bax.axs is a 2D array of Axes
-        ax.get_xaxis().set_ticks([])
+        ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][2], color=line_color_list[i_c])
+    ax[ax_num].set_ylabel('Antibiotic')
+    ax[ax_num].get_xaxis().set_ticks([])
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # if xlim is not None:
+    ax[ax_num].set_xlim(xlim)
     # ax[ax_num].axvline(x=72, color='white')
 
-    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps2)
+    ax_num += 1
     for i_c, j in enumerate(choices):  # Choose a subset (e.g., 20 out of 100) for shadow effect
-        bax.plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
-    bax.set_ylabel('Nutrient')
-    bax.axvline(x=t[61-1], linestyle='--', color='k')
-    for ax in bax.axs:  # bax.axs is a 2D array of Axes
-        ax.get_xaxis().set_ticks([])
+        ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][3], color=line_color_list[i_c])
+    ax[ax_num].set_ylabel('Nutrient')
+    ax[ax_num].get_xaxis().set_ticks([])
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # if xlim is not None:
+    ax[ax_num].set_xlim(xlim)
+    # ax[ax_num].axvline(x=72, color='white')
 
-    bax = brokenaxes(xlims=((0, 25), (60, 70)), subplot_spec=sps3)
+    ax_num += 1
     for i_c, j in enumerate(choices):
-        bax.plot(tcbk_list[j][0], tcbk_list[j][1], color=line_color_list[i_c])
-    bax.set_ylabel(r'$P$')
-    bax.set_xlabel('Time (h)')
-    bax.set_yscale('log')
-    bax.axvline(x=t[61-1], linestyle='--', color='k')
+        ax[ax_num].plot(tcbk_list[j][0], tcbk_list[j][1], color=line_color_list[i_c])
+    ax[ax_num].set_ylabel(r'$P$')
+    ax[ax_num].set_xlabel('Time (h)')
+    ax[ax_num].set_yscale('log')
+    ax[ax_num].axvline(x=t[61-1], linestyle='--', color='k')
+    # if xlim is not None:
+    ax[ax_num].set_xlim(xlim)
+    # ax[ax_num].axvline(x=72, color='white')
 
+    # out_path = "figures/a%.2f_n%.2f_value_check/"%(antibiotic_value, nutrient_value)
+    # extract path from out_name
     out_path = os.path.dirname(out_name)
+    # out_path.mkdir(parents=True, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
 
     figure.savefig(out_name, dpi=300, bbox_inches='tight')

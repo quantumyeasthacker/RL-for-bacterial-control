@@ -7,7 +7,7 @@ import pickle
 import seaborn as sns
 # from scipy.optimize import curve_fit
 import matplotlib as mpl
-from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate, plot_single_varenv, plot_one_traj, plot_single_trunc
+from utils import expand_and_fill, estimate_frequency_fft, down_edge_detection, load_logger_data_new, get_best_row_extinct_rate, plot_single_varenv, plot_one_traj, plot_single_control
 from pathlib import Path
 
 
@@ -86,13 +86,15 @@ for param in param_sim:
         choice_list = [1, 2]
         line_color_list = ["slateblue"]*2
 
-    out_name = BASE_PATH / "figures_jpg" / "control_nutr_trunc" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.jpg"
-    plot_single_trunc(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr_40" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.jpg"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list,
+        figure_size = (3.2, 4.8)
     )
-    out_name = BASE_PATH / "figures_pdf" / "control_nutr_trunc" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.pdf"
-    plot_single_trunc(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr_40" / f"a{antibiotic_value:.2f}_n{nutrient_range}_value_check_{manual_protocol}.pdf"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials, choices = choice_list,
+        figure_size = (3.2, 4.8)
     )
 
     tcbk_list, _, _, _, cell_array, _ = loaded_logger
@@ -188,15 +190,24 @@ for param in param_agent:
     choice_list = [17, 18, 41]
     line_color_list = ["seagreen"]*3
     
-    out_name = BASE_PATH / "figures_jpg" / "control_nutr" / f"{trial_name}_{training_episode}_traj.jpg"
-    plot_single_varenv(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr_40" / f"{trial_name}_{training_episode}_traj.jpg"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list, xlim = None
     )
-    out_name = BASE_PATH / "figures_pdf" / "control_nutr" / f"{trial_name}_{training_episode}_traj.pdf"
-    plot_single_varenv(
-        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr_40" / f"{trial_name}_{training_episode}_traj.pdf"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list, xlim = None
     )
 
+    choice_list = [17]
+    out_name = BASE_PATH / "figures_jpg" / "control_nutr_40" / f"{trial_name}_{training_episode}_traj_17_short.jpg"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list, figure_size = (3.2, 4.8), xlim = None
+    )
+    out_name = BASE_PATH / "figures_pdf" / "control_nutr_40" / f"{trial_name}_{training_episode}_traj_17_short.pdf"
+    plot_single_control(
+        loaded_logger, out_name, line_color_list = line_color_list, n_trials = n_trials_eval, choices = choice_list, figure_size = (3.2, 4.8), xlim = None
+    )
 
     tcbk_list, _, _, _, cell_array, _ = loaded_logger
     extinction = [1 if tcbk[1, -1] == 0 else 0 for tcbk in tcbk_list]
