@@ -26,12 +26,12 @@ class CellConfig:
     K_u: float = 0.076
 
     # mutation parameters
-    mutate: bool = False # if True, phiS_max and phiR_max can change at division
+    mutate: bool = False # if True, phiS_max can change at each division event
     mutate_prob: Optional[Union[float, None]] = 0.01 # probability of mutation
     phiSmax_sigma: float = 0.1 # set the std of deviation from parent
     scale: float = 1.4 # hard upper limit on protein expression
     assert scale * phiS_max < phiR_max, 'scale value is unphysical (too large)'
-
+    rand_init: bool = False # if True, phiS_max can change at the beginning of each episode
 
 class Cell_Population(object):
     def __init__(self, cell_config):
@@ -66,6 +66,7 @@ class Cell_Population(object):
         self.mutate_prob = cell_config.mutate_prob
         self.scale = cell_config.scale
         self.phiSmax_sigma = cell_config.phiSmax_sigma
+        self.rand_init = cell_config.rand_init
 
         # defining regulatory functions and their derivatives
     def f(self, a):
@@ -159,7 +160,12 @@ class Cell_Population(object):
         a_birth = np.ones((num_cells_init))*a0
         U_birth = np.ones((num_cells_init))*U0
 
-        phiSmax_birth = np.ones((num_cells_init))*self.phiS_max
+        if self.rand_init:
+            phiS_max = np.random.normal(loc=self.phiS_max, scale=0.1*self.phiS_max)
+            phiS_max = np.clip(phiS_max,0,self.phiS_max*self.scale)
+        else:
+            phiS_max = self.phiS_max
+        phiSmax_birth = np.ones((num_cells_init))*phiS_max
 
         # assigning random initial cell volume, in um^3
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
