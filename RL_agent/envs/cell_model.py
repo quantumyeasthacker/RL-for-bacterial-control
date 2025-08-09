@@ -12,8 +12,6 @@ class CellConfig:
     a_t: float = 1e-4 # amino acid level for efficient peptide elongation, Scott et al. 2014
     n_f: int = 2 # cooperativity in feedback
     n_g: int = 2
-    mutate: bool = False # if True, phiS_max and phiR_max can change at division
-    mutate_prob: Optional[Union[float, None]] = 0.01 # probability of mutation
 
     # Kratz and Banerjee 2023
     sigma: float = 0.015 # noise strength
@@ -27,6 +25,13 @@ class CellConfig:
     beta: float = 10.5
     K_u: float = 0.076
 
+    # mutation parameters
+    mutate: bool = False # if True, phiS_max can change at each division event
+    mutate_prob: Optional[Union[float, None]] = 0.01 # probability of mutation
+    phiSmax_sigma: float = 0.1 # set the std of deviation from parent
+    scale: float = 1.4 # hard upper limit on protein expression
+    assert scale * phiS_max < phiR_max, 'scale value is unphysical (too large)'
+    rand_init: bool = False # if True, phiS_max can change at the beginning of each episode
 
 class Cell_Population(object):
     def __init__(self, cell_config):
@@ -34,8 +39,6 @@ class Cell_Population(object):
         self.populations = None
         self.guess_value_list = None
         self._log = None
-        self.mutate = cell_config.mutate
-        self.mutate_prob = cell_config.mutate_prob
 
         # cell parameters
         self.cell_config = cell_config
@@ -57,6 +60,13 @@ class Cell_Population(object):
         self.alpha = cell_config.alpha
         self.beta = cell_config.beta
         self.K_u = cell_config.K_u
+
+        # mutation parameters
+        self.mutate = cell_config.mutate
+        self.mutate_prob = cell_config.mutate_prob
+        self.scale = cell_config.scale
+        self.phiSmax_sigma = cell_config.phiSmax_sigma
+        self.rand_init = cell_config.rand_init
 
         # defining regulatory functions and their derivatives
     def f(self, a):
@@ -150,7 +160,12 @@ class Cell_Population(object):
         a_birth = np.ones((num_cells_init))*a0
         U_birth = np.ones((num_cells_init))*U0
 
-        phiSmax_birth = np.ones((num_cells_init))*self.phiS_max
+        if self.rand_init:
+            phiS_max = np.random.normal(loc=self.phiS_max, scale=0.1*self.phiS_max)
+            phiS_max = np.clip(phiS_max,0,self.phiS_max*self.scale)
+        else:
+            phiS_max = self.phiS_max
+        phiSmax_birth = np.ones((num_cells_init))*phiS_max
 
         # assigning random initial cell volume, in um^3
         cycle_t = np.log(2) / self.GrowthRate(a0, phi_R0, U0)
@@ -274,13 +289,10 @@ class Cell_Population(object):
                 X_stack_children[5] = X_stack_children[5] * (1 - r)
 
                 if self.mutate:
-                    sigma = 0.1 # set the std of deviation from parent
-                    scale = 1.4 # hard upper limit on protein expression
-
                     # mutating each child with probability mu
                     mut_ind = np.random.rand(birth_check.sum()) < self.mutate_prob
-                    phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,sigma, size=mut_ind.sum()))
-                    X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*scale)
+                    phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,self.phiSmax_sigma, size=mut_ind.sum()))
+                    X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*self.scale)
 
                 species_stack[4,birth_check] = 0
                 species_stack[5,birth_check] = species_stack[5,birth_check] * r
