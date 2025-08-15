@@ -32,6 +32,7 @@ class CellConfig:
     scale: float = 1.4 # hard upper limit on protein expression
     assert scale * phiS_max < phiR_max, 'scale value is unphysical (too large)'
     rand_init: bool = False # if True, phiS_max can change at the beginning of each episode
+    rand_std: Optional[Union[float, None]] = 0.1 # set the std for episode initialization
 
 class Cell_Population(object):
     def __init__(self, cell_config):
@@ -67,6 +68,7 @@ class Cell_Population(object):
         self.scale = cell_config.scale
         self.phiSmax_sigma = cell_config.phiSmax_sigma
         self.rand_init = cell_config.rand_init
+        self.rand_std = cell_config.rand_std
 
         # defining regulatory functions and their derivatives
     def f(self, a):
@@ -161,7 +163,7 @@ class Cell_Population(object):
         U_birth = np.ones((num_cells_init))*U0
 
         if self.rand_init:
-            phiS_max = np.random.normal(loc=self.phiS_max, scale=0.1*self.phiS_max)
+            phiS_max = np.random.normal(loc=self.phiS_max, scale=self.rand_std*self.phiS_max)
             phiS_max = np.clip(phiS_max,0,self.phiS_max*self.scale)
         else:
             phiS_max = self.phiS_max
