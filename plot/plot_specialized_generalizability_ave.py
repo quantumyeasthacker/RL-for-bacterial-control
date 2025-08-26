@@ -540,19 +540,19 @@ combined_df = pd.concat([df1, df2, df3], ignore_index=True)
 combined_df = combined_df.sort_values(by=['inst_combination', 'source'])
 
 #####
-select_sources = ["Single-env agent n1.00", "Single-env agent n2.00", "Single-env agent T6", "Single-env agent T12", "Multi-env agent"]
-select_inst_comb = ["constenv_1.00", "constenv_2.00", "varenv_6", "varenv_12"]
+select_sources = ["Single-env agent n1.00", "Single-env agent n3.00", "Single-env agent T6", "Single-env agent T12", "Multi-env agent"]
+select_inst_comb = ["constenv_1.00", "constenv_3.00", "varenv_6", "varenv_12"]
 combined_df = combined_df.loc[(combined_df['source'].isin(select_sources)) & (combined_df["inst_combination"].isin(select_inst_comb))].reset_index(drop=True)
 combined_df['source'] = combined_df['source'].astype('category')
 
-inst_order = ["Env n1.00", "Env n2.00", "Env T6", "Env T12",]
-agent_order = ["Single-env agent n1.00", "Single-env agent n2.00",
+inst_order = ["Env n1.00", "Env n3.00", "Env T6", "Env T12",]
+agent_order = ["Single-env agent n1.00", "Single-env agent n3.00",
                "Single-env agent T6", "Single-env agent T12",
                "Multi-env agent"]
 
 custom_palette = {
     "Single-env agent n1.00": "#edf5d7",
-    "Single-env agent n2.00": "#C9F7CF",
+    "Single-env agent n3.00": "#C9F7CF",
     "Single-env agent T6": "#d3e6f4",
     "Single-env agent T12": "#B5AAF7",
     "Multi-env agent": "#dac4cd"
