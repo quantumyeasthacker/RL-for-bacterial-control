@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rl-for-bacterial-control"
+version = "0.1.0"
+description = "Reinforcement learning for physiological control of heterogeneous cell populations."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "torch",
+    "joblib",
+    "matplotlib",
+    "wandb",
+]
+
+[project.optional-dependencies]
+# Extra packages used only by the standalone scripts under plotting/.
+plotting = [
+    "pandas",
+    "seaborn",
+    "statsmodels",
+    "brokenaxes",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
