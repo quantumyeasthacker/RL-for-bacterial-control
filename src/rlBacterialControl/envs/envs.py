@@ -26,6 +26,11 @@ class EnvConfig:
     b_observation: bool = True
     omega: float = 0.02
 
+    # measurement imperfection parameters (real bacterial measurements are noisy and lagged)
+    # both default to "off", so a zero-config env reproduces the original (perfect-sensing) behavior.
+    meas_noise_std: float = 0.0 # std of log-normal multiplicative noise on the measured population count; 0 disables noise
+    meas_lag: int = 0 # number of decision steps the bacterial (growth-rate) measurement is delayed; 0 disables lag
+
     num_actions: int = 2
     b_actions: list[int] = field(default_factory=list)
 
@@ -66,13 +71,19 @@ class BaseEnv(object):
         self.num_actions = env_config.num_actions
         self.b_actions = env_config.b_actions
 
+        self.meas_noise_std = env_config.meas_noise_std
+        self.meas_lag = env_config.meas_lag
+        # the growth-rate history must hold delay_embed_len observed values plus meas_lag
+        # extra values to be able to report a window that ends meas_lag steps in the past.
+        self._meas_history_len = self.delay_embed_len + self.meas_lag
+
         self.iterations = int(env_config.delta_t * env_config.n_steps)
         if self.warm_up is None:
-            warnings.warn("warm_up is not specified, setting warm_up to delay_embed_len.", category=UserWarning)
-            self.warm_up = self.delay_embed_len
-        elif self.warm_up < self.delay_embed_len:
-            warnings.warn("warm_up is less than delay_embed_len, setting warm_up to delay_embed_len.", category=UserWarning)
-            self.warm_up = self.delay_embed_len
+            warnings.warn("warm_up is not specified, setting warm_up to delay_embed_len + meas_lag.", category=UserWarning)
+            self.warm_up = self._meas_history_len
+        elif self.warm_up < self._meas_history_len:
+            warnings.warn("warm_up is less than delay_embed_len + meas_lag, increasing warm_up to delay_embed_len + meas_lag.", category=UserWarning)
+            self.warm_up = self._meas_history_len
         self.sim_cells = Cell_Population(cell_config)
 
         self._k_n0_constant = None
@@ -90,9 +101,12 @@ class BaseEnv(object):
         if b is None:
             b = self.b_init
         self.sim_cells.initialize(self.num_cells_init, k_n0, b)
-        self.num_cells_history = [0] * self.delay_embed_len
+        self.num_cells_history = [0] * self._meas_history_len
         self.k_n0_history = [0] * self.delay_embed_len
         self.b_history = [0] * self.delay_embed_len
+        # noise on the count at step t-1 is shared by the growth-rate estimates at t-1 and t,
+        # so we carry the previous measurement's log-noise realization across steps.
+        self._prev_meas_log_noise = np.random.normal(0, self.meas_noise_std) if self.meas_noise_std > 0 else 0.0
 
     def step(self, action):
         raise NotImplementedError
@@ -113,13 +127,30 @@ class BaseEnv(object):
     def observation(self, num_cells_prev, num_cells, k_n0, b):
         num_cells = 1e-5 if num_cells == 0 else num_cells
         growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
+
+        # measurement noise: real population counts (OD/CFU) carry multiplicative error.
+        # Model it as log-normal noise on the count, N_meas = N_true * exp(eps). The agent
+        # observes the finite-difference growth rate, so eps propagates as
+        #   growth_rate_obs = growth_rate_true + (eps_t - eps_{t-1}) / delta_t.
+        # N_{t-1} is measured once but enters two consecutive estimates, hence the shared
+        # eps_{t-1} carried in self._prev_meas_log_noise (gives realistic correlated noise).
+        if self.meas_noise_std > 0:
+            meas_log_noise = np.random.normal(0, self.meas_noise_std)
+            growth_rate = growth_rate + (meas_log_noise - self._prev_meas_log_noise) / self.delta_t
+            self._prev_meas_log_noise = meas_log_noise
+
         self.num_cells_history.pop(0)
         self.num_cells_history.append(growth_rate)
         self.k_n0_history.pop(0)
         self.k_n0_history.append(k_n0)
         self.b_history.pop(0)
         self.b_history.append(b)
-        obs = self.num_cells_history + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
+
+        # time lag: the bacterial measurement reaches the agent meas_lag decision steps late,
+        # so it sees the growth-rate window ending meas_lag steps in the past. The drug-action
+        # history (b) and nutrient signal (k_n0) stay current -- the agent knows what it applied.
+        growth_rate_obs = self.num_cells_history[:self.delay_embed_len]
+        obs = growth_rate_obs + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
         return copy.deepcopy(obs)
 
     def reward(self, num_cells_prev, num_cells, b):
