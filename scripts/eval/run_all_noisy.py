@@ -37,11 +37,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 HERE = os.path.dirname(os.path.abspath(__file__))
 EVAL_SCRIPT = os.path.join(HERE, "eval_trained_agents_noisy.py")
 
-# import the eval module so the driver and the eval script share the episode resolver
-_spec = importlib.util.spec_from_file_location("eval_noisy", EVAL_SCRIPT)
-eval_noisy = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(eval_noisy)
-resolve_episode = eval_noisy.resolve_episode
+# The eval module provides the episode resolver. It imports numpy at load time, so we
+# import it lazily: --emit-params (which does not need it) can run on a bare access point
+# without the job's scientific-python env installed.
+resolve_episode = None
+
+
+def _load_eval():
+    """Populate resolve_episode from the eval script (needs its deps installed)."""
+    global resolve_episode
+    if resolve_episode is not None:
+        return
+    spec = importlib.util.spec_from_file_location("eval_noisy", EVAL_SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    resolve_episode = mod.resolve_episode
 
 # env_type -> results/train subfolder (processed in this order)
 ENV_DIRS = {
@@ -145,6 +155,36 @@ def is_done(eval_out, rep_eval, num_reps_eval):
     return os.path.exists(os.path.join(eval_out, last))
 
 
+def eval_arg_tail(t, args):
+    """The eval script's argv, minus [python, EVAL_SCRIPT] -- i.e. one HTCondor job.
+    Single source of truth shared by the local runner (build_cmd) and --emit-params, so
+    the OSPool sweep can never drift from what `python run_all_noisy.py` would run.
+    Passes --episode verbatim (each job resolves 'last' itself), so emitting needs no
+    numpy and does not touch the episode dirs."""
+    return [t["env_type"],
+            "--results-dir", t["results_dir"], "--out-dir", args.out_dir,
+            "--noise", str(t["noise"]), "--lag", str(t["lag"]),
+            "--episode", args.episode, "--rep-eval", str(args.rep_eval),
+            "--num-decisions", str(args.num_decisions),
+            "--num-reps-eval", str(args.num_reps_eval)] + t["cli"]
+
+
+def emit_params(args, grid, path):
+    """Write one line per task (its eval argv) for HTCondor's `queue ... from <file>`.
+    Mirrors the task enumeration below but skips episode resolution / skip-done."""
+    n = 0
+    with open(path, "w") as fh:
+        for env_type in args.env_types:
+            results_dir = os.path.join(args.results_root, ENV_DIRS[env_type])
+            for run in enumerate_runs(env_type, results_dir):
+                for noise, lag in grid:
+                    t = dict(env_type=env_type, results_dir=results_dir,
+                             cli=run["cli"], noise=noise, lag=lag)
+                    fh.write(" ".join(eval_arg_tail(t, args)) + "\n")
+                    n += 1
+    print(f"wrote {path} ({n} jobs)")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--results-root", default="results/train", help="dir holding the per-env-type folders")
@@ -160,10 +200,19 @@ def main():
     p.add_argument("--jobs", type=int, default=16, help="parallel eval processes (default 16)")
     p.add_argument("--force", action="store_true", help="re-run even if outputs already exist")
     p.add_argument("--dry-run", action="store_true", help="list/count tasks without running")
+    p.add_argument("--emit-params", metavar="PATH",
+                   help="write one job's eval-args per line to PATH (for HTCondor `queue ... from`) and exit")
     p.add_argument("--limit", type=int, default=None, help="cap number of tasks (for testing)")
     args = p.parse_args()
 
     grid = [(n, l) for n in args.noise for l in args.lag]  # (0,0) first -> baselines early
+
+    # OSPool path: dump the per-task argv and exit -- no eval deps, no local execution.
+    if args.emit_params:
+        emit_params(args, grid, args.emit_params)
+        return
+
+    _load_eval()  # local run path needs the episode resolver
 
     # build the full task list, in env order
     tasks = []          # each: dict(env_type, results_dir, trial_name, eval_suffix, cli, noise, lag, eval_out)
@@ -225,12 +274,7 @@ def main():
         manifest_w.writerow(["env_type", "eval_suffix", "noise", "lag", "status", "seconds", "eval_out"])
 
     def build_cmd(t):
-        return [sys.executable, EVAL_SCRIPT, t["env_type"],
-                "--results-dir", t["results_dir"], "--out-dir", args.out_dir,
-                "--noise", str(t["noise"]), "--lag", str(t["lag"]),
-                "--episode", args.episode, "--rep-eval", str(args.rep_eval),
-                "--num-decisions", str(args.num_decisions),
-                "--num-reps-eval", str(args.num_reps_eval)] + t["cli"]
+        return [sys.executable, EVAL_SCRIPT] + eval_arg_tail(t, args)
 
     def run_one(t):
         t0 = time.time()
