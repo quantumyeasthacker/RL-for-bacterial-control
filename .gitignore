@@ -13,11 +13,17 @@ env/
 
 # Experiment / run outputs
 wandb/
+param_space/
 results/
 results_*/
 *_eval/
+figures**
+logs**/
 
 # OS / editor
 .DS_Store
 .idea/
 .vscode/
+
+# archive
+archive

@@ -21,7 +21,7 @@ EPS = 1e-6
 default_color_list = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
 # BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/")
-BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
+BASE_PATH = Path("/home/zihangw/RL-for-bacterial-control")
 
 # %%
 delta_t = 0.2
@@ -35,7 +35,7 @@ max_pop: int = int(1e11)
 # %% ----- ----- ----- ----- constant sim ----- ----- ----- ----- %% #
 env_type = "constenv"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval_0.txt"
-eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
+eval_folder = BASE_PATH / "results" / "eval" / f"results_delay_30_record_{env_type}_eval"
 
 n_trials_eval = 100
 
@@ -132,6 +132,8 @@ par1.set(ylabel = "Pulsing Frequency")
 host.axis["left"].label.set_color(p1.get_color())
 par1.axis["right"].label.set_color(p2.get_color())
 
+os.makedirs(BASE_PATH / "figures_pdf", exist_ok=True)
+os.makedirs(BASE_PATH / "figures_jpg", exist_ok=True)
 fig.savefig(BASE_PATH / f"figures_pdf" / "pop_size_pulsing_freq_err_area.pdf", dpi=600, bbox_inches='tight')
 fig.savefig(BASE_PATH / f"figures_jpg" / "pop_size_pulsing_freq_err_area.jpg", dpi=600, bbox_inches='tight')
 

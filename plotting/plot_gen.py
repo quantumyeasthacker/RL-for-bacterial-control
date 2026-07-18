@@ -19,7 +19,9 @@ EPS = 1e-6
 COLOR_LIST = ["#dec60c", "#a7c82f", "#548c6a", "#5e6b75"]
 
 # BASE_PATH = Path("/mnt/c/Users/zhwen/Dropbox/BacteriaAdaptation/")
-BASE_PATH = Path("/home/zihangw/BacteriaAdaptation")
+BASE_PATH = Path("/home/zihangw/RL-for-bacterial-control")
+os.makedirs(BASE_PATH / "figures_pdf", exist_ok=True)
+os.makedirs(BASE_PATH / "figures_jpg", exist_ok=True)
 
 # %%
 delta_t = 0.2
@@ -37,7 +39,7 @@ max_pop: int = int(1e11)
 # %% ----- ----- ----- ----- constant sim ----- ----- ----- ----- %% #
 env_type = "constenv"
 param_file = BASE_PATH / "param_space" / f"param_non_monotonic_pulsing_{env_type}.txt"
-sim_folder = BASE_PATH / f"results_sim_{env_type}"
+sim_folder = BASE_PATH / "results" / "sim" / f"results_sim_{env_type}"
 # sim_folder = BASE_PATH / "20250309_constant_app" / sim_folder
 
 n_trials = 100
@@ -109,7 +111,7 @@ df_constant_sim_cst_app = df_constant_sim[df_constant_sim["initialize_app"] == "
 # %% ----- ----- ----- ----- constant eval ----- ----- ----- ----- %% #
 env_type = "constenv"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval.txt"
-eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
+eval_folder = BASE_PATH / "results" / "eval" / f"results_delay_30_record_{env_type}_eval"
 # eval_folder = BASE_PATH / "20250309_constant_app" / eval_folder
 
 n_trials_eval = 100
@@ -174,7 +176,7 @@ df_constant_eval["extinction_rate"] = extinction_rate_list
 # %% ----- ----- ----- ----- varenv sim ----- ----- ----- ----- %% #
 env_type = "varenv"
 param_file = BASE_PATH / "param_space" / f"param_non_monotonic_pulsing_{env_type}.txt"
-sim_folder = BASE_PATH / f"results_sim_{env_type}"
+sim_folder = BASE_PATH / "results" / "sim" / f"results_sim_{env_type}"
 # sim_folder = BASE_PATH / "20250325_varenv" / sim_folder
 
 n_trials = 100
@@ -252,7 +254,7 @@ df_varenv_sim_cst_app = df_varenv_sim[df_varenv_sim["initialize_app"] == "consta
 # %% ----- ----- ----- ----- varenv eval ----- ----- ----- ----- %% #
 env_type = "varenv"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval.txt"
-eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
+eval_folder = BASE_PATH / "results" / "eval" / f"results_delay_30_record_{env_type}_eval"
 # eval_folder = BASE_PATH / "20250325_varenv" / eval_folder
 
 n_trials_eval = 100
@@ -322,7 +324,7 @@ df_varenv_eval["extinction_rate_std"] = extinction_rate_std_list
 # %% ----- ----- ----- ----- generalized eval ----- ----- ----- ----- %% #
 env_type = "generalized"
 param_file = BASE_PATH / "param_space" / f"param_agent_delay_30_{env_type}_eval.txt"
-eval_folder = BASE_PATH / f"results_delay_30_record_{env_type}_eval"
+eval_folder = BASE_PATH / "results" / "eval" / f"results_delay_30_record_{env_type}_eval"
 # eval_folder = BASE_PATH / "20250421_generalized" / eval_folder
 
 n_trials_eval = 100
@@ -398,8 +400,8 @@ df_generalized_eval["extinction_rate"] = extinction_rate_list
 # %% ----- ----- ----- ----- gen v.s. special ----- ----- ----- ----- %% #
 # df_constant_sim_cst_app
 # df_constant_eval
-df_constant_eval_app = df_constant_eval.groupby("inst_combination", group_keys=False).apply(
-    get_best_row_extinct_rate, include_groups=True
+df_constant_eval_app = pd.DataFrame(
+    [get_best_row_extinct_rate(g) for _, g in df_constant_eval.groupby("inst_combination")]
 ).reset_index(drop=True)
 # df_constant_eval_app = df_constant_eval.loc[df_constant_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_constant_eval_app = df_constant_eval_app.merge(df_constant_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")
@@ -408,8 +410,8 @@ df_constant_eval_app["log_diff"] = df_constant_eval_app["sim_log_cell"] - df_con
 # %%
 # df_varenv_sim_cst_app
 # df_varenv_eval
-df_varenv_eval_app = df_varenv_eval.groupby("inst_combination", group_keys=False).apply(
-    get_best_row_extinct_rate, include_groups=True
+df_varenv_eval_app = pd.DataFrame(
+    [get_best_row_extinct_rate(g) for _, g in df_varenv_eval.groupby("inst_combination")]
 ).reset_index(drop=True)
 # df_varenv_eval_app = df_varenv_eval.loc[df_varenv_eval.groupby(['inst_combination'])['eval_log_cell'].idxmin()].reset_index(drop=True)
 df_varenv_eval_app = df_varenv_eval_app.merge(df_varenv_sim_cst_app[["inst_combination", "sim_log_cell"]], on="inst_combination")

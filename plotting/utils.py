@@ -38,11 +38,17 @@ def get_best_row_extinct_rate(group):
         return group.loc[group["eval_log_cell"].idxmin()]
 
 def expand_and_fill(vec, threshold):
-    """Expands the vector to the given threshold length, filling with zeros if necessary."""
+    """Expand the vector to the given threshold length by holding its last value.
+
+    Trajectories end early on termination: extinction (last value 0) or a max_pop
+    blow-up (last value near max_pop). Holding the last value is correct for both
+    (extinct stays 0, blown-up stays high); zero-fill would wrongly collapse a
+    blown-up trajectory to 0 for its padded tail.
+    """
     if len(vec) >= threshold:
         return vec[:threshold]  # Trim if longer
     else:
-        return np.pad(vec, (0, threshold - len(vec)), mode='constant', constant_values=0)
+        return np.pad(vec, (0, threshold - len(vec)), mode='edge')
 
 
 def estimate_frequency_fft(sequence, axis=-1, sampling_unit=1.0):
