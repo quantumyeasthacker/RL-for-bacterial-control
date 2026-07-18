@@ -64,7 +64,7 @@ CONST_NUTRIENTS = {1.0, 2.0, 3.0}      # constant-nutrient k_n0 values to includ
 VAR_PERIODS = {"12"}                   # variable-nutrient T_k_n0 periods to include
 CONTROL_NRANGES = {"1_3"}              # control nutrient action sets to include
 CONTROL_OBS_FILTER = ("True", "True")  # control (b_obs, k_obs): the paper uses both True
-GEN_EPISODES = {"500"}                 # generalized agent: training-episode counts to include
+GEN_EPISODES = {"400"}                 # generalized agent: training-episode counts to include
 
 # trial-name parsers (the dir basename is the trial_name produced by the training scripts)
 RE_CONST = re.compile(r"^a([\d.]+)_n([\d.]+)_delay(\d+)_rep(\d+)$")
