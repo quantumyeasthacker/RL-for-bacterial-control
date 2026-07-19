@@ -40,9 +40,21 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)  # let the sibling eval scripts import by module name
-from baseline_policies_bactparam import family_policies  # noqa: E402
-from eval_trained_agents_bactparam import param_tag       # noqa: E402
+from baseline_policies_bactparam import family_policies  # noqa: E402 (bare-safe: heavy deps are lazy)
 from run_all_bactparam import build_grid                  # noqa: E402
+
+# param_tag lives in eval_trained_agents_bactparam, which imports numpy/torch at load time. Load
+# it lazily (mirrors run_all_bactparam._load_eval) so --emit-params runs on a bare access point;
+# only the local-run path resolves on-disk tags.
+param_tag = None
+
+
+def _load_param_tag():
+    global param_tag
+    if param_tag is None:
+        from eval_trained_agents_bactparam import param_tag as _pt
+        param_tag = _pt
+
 
 RUNNER = os.path.join(HERE, "baseline_policies_bactparam.py")
 
@@ -90,6 +102,35 @@ def is_done(eval_out, rep_eval, num_reps_eval):
     return os.path.exists(os.path.join(eval_out, last))
 
 
+def eval_arg_tail(t, args):
+    """One HTCondor job's argv for baseline_policies_bactparam.py, minus [python, RUNNER].
+    Single source of truth shared by the local runner (build_cmd) and --emit-params, so the
+    OSPool sweep can never drift from a local run. Uses no numpy -> emits on a bare access point."""
+    return [t["family"],
+            "--policy", t["policy"], "--out-dir", args.out_dir,
+            "--alpha-mult", str(t["ma"]), "--beta-mult", str(t["mb"]),
+            "--sigma-mult", str(t["ms"]), "--antibiotic", str(args.antibiotic),
+            "--delay", str(args.delay), "--num-decisions", str(args.num_decisions),
+            "--num-reps-eval", str(args.num_reps_eval), "--rep-eval", str(args.rep_eval),
+            ] + condition_flag(t["family"], t["cond"])
+
+
+def emit_params(args, grid, path):
+    """Write one line per task (its baseline argv) for HTCondor `queue ... from <file>`.
+    Mirrors the task enumeration in main but skips the skip-done check (like run_all_bactparam),
+    so the emitted file is deterministic regardless of what has already run."""
+    n = 0
+    with open(path, "w") as fh:
+        for family in args.families:
+            for cond in conditions_for(family, args):
+                for policy in family_policies(family):
+                    for ma, mb, ms in grid:
+                        t = dict(family=family, cond=cond, policy=policy, ma=ma, mb=mb, ms=ms)
+                        fh.write(" ".join(eval_arg_tail(t, args)) + "\n")
+                        n += 1
+    print(f"wrote {path} ({n} jobs)")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out-dir", default="results/eval_bactparam_baseline")
@@ -108,10 +149,20 @@ def main():
     p.add_argument("--jobs", type=int, default=16)
     p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--emit-params", metavar="PATH",
+                   help="write one job's baseline-args per line to PATH (for HTCondor "
+                        "`queue ... from`) and exit; runs on a bare access point")
     p.add_argument("--limit", type=int, default=None)
     args = p.parse_args()
 
     grid = build_grid(args.alpha_mults, args.beta_mults, args.sigma_mults)  # baseline (1,1,1) first
+
+    # OSPool path: dump the per-task argv and exit -- no eval deps, no local execution.
+    if args.emit_params:
+        emit_params(args, grid, args.emit_params)
+        return
+
+    _load_param_tag()  # local run resolves on-disk tags via param_tag
 
     tasks = []
     skipped = 0
@@ -165,13 +216,7 @@ def main():
                              "sigma_mult", "status", "seconds", "eval_out"])
 
     def build_cmd(t):
-        return [sys.executable, RUNNER, t["family"],
-                "--policy", t["policy"], "--out-dir", args.out_dir,
-                "--alpha-mult", str(t["ma"]), "--beta-mult", str(t["mb"]),
-                "--sigma-mult", str(t["ms"]), "--antibiotic", str(args.antibiotic),
-                "--delay", str(args.delay), "--num-decisions", str(args.num_decisions),
-                "--num-reps-eval", str(args.num_reps_eval), "--rep-eval", str(args.rep_eval),
-                ] + condition_flag(t["family"], t["cond"])
+        return [sys.executable, RUNNER] + eval_arg_tail(t, args)
 
     def run_one(t):
         t0 = time.time()

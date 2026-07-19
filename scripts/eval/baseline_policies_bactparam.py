@@ -40,13 +40,11 @@ import argparse
 import contextlib
 import pickle
 
-import numpy as np
-
-from rlBacterialControl.envs.envs import (
-    EnvConfig, ConstantNutrientEnv, VariableNutrientEnv, ControlNutrientEnv,
-)
-# single source of truth for the perturbation + on-disk tag, shared with the RL eval
-from eval_trained_agents_bactparam import make_cell_config, param_tag
+# numpy, the env classes, and the perturbation/tag helpers are imported lazily inside the
+# functions that use them (make_env / main). This keeps family_policies() -- the only thing the
+# OSPool driver's --emit-params pulls from this module -- importable on a bare access point with
+# no numpy/torch installed. The single source of truth for the perturbation + on-disk tag is
+# still eval_trained_agents_bactparam (imported in main).
 
 # pulsing half-periods swept for the const family (decisions); best member is picked downstream.
 PULSE_HALVES = [3, 5, 10, 15, 20, 25, 30, 40]
@@ -74,6 +72,10 @@ def family_policies(family):
 def make_env(family, args, cell_cfg):
     """Build the env for a family with the SAME EnvConfig the RL eval uses, minus the trained
     model. delay_embed_len/warm_up/max_pop mirror eval_trained_agents_bactparam.build."""
+    import numpy as np
+    from rlBacterialControl.envs.envs import (
+        EnvConfig, ConstantNutrientEnv, VariableNutrientEnv, ControlNutrientEnv,
+    )
     a, d = args.antibiotic, args.delay
     if family == "const":
         cfg = EnvConfig(
@@ -171,6 +173,9 @@ def main():
     if args.policy not in family_policies(args.family):
         raise SystemExit(f"policy {args.policy!r} is not valid for family {args.family!r}; "
                          f"choose from {family_policies(args.family)}")
+
+    # single source of truth for the perturbation + on-disk tag, shared with the RL eval
+    from eval_trained_agents_bactparam import make_cell_config, param_tag
 
     cell_cfg = make_cell_config(args.alpha_mult, args.beta_mult, args.sigma_mult)
     env = make_env(args.family, args, cell_cfg)
