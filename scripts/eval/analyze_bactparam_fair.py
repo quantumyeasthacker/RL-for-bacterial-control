@@ -29,6 +29,13 @@ Outputs (results/eval_bactparam/analysis_fair/):
   heat_advantage_ext.png  alpha x beta extinction-advantage heatmap (RL - best fixed)
   marginal_<group>.png    alpha- and beta-marginal overlays: RL vs each baseline (lines move
                           together = "drug got weaker", RL line diverging = RL-specific change)
+  sigma_marginal_<group>.png  sigma-marginal overlay (alpha=beta=1): RL vs each fixed protocol on
+                          the same noisier bacteria (sigma is swept alone, not crossed w/ a,b)
+  sigma_advantage_<group>.png  per env group: condition panels, sigma on x, y = RL (and clever
+                          fixed comparator) suppression advantage over the env's naive protocol
+                          (const/var -> constant, control -> feast)
+  sigma_extinction_<group>.png  per env group: condition panels, sigma on x, P(extinct) for the
+                          naive protocol / clever fixed comparator / RL
 
 Run from repo root (after both eval sweeps have populated their trees):
   python scripts/eval/analyze_bactparam_fair.py
@@ -183,6 +190,175 @@ def marginal_overlays(rl, bl, cmp):
         plt.close(fig)
 
 
+def sigma_marginal_overlays(rl, bl, cmp):
+    """Sigma is the damage-noise variance, so it is swept on its own axis (alpha=beta=1) rather
+    than crossed with them -- there is no alpha x beta plane to average, hence a separate 1-D
+    comparison. Per group: log_mean_pop vs sigma multiplier, overlaying the RL policy against
+    every fixed protocol on the SAME bacteria. RL line pulling away from the fixed protocols as
+    sigma grows = a policy-specific robustness (or fragility) to noisier damage dynamics."""
+    groups = [g for g in GROUP_ORDER if g in cmp["group"].unique()]
+    pairs = sorted({(g, c) for g in groups
+                    for c in cmp[cmp.group == g]["condition"].unique()})
+    for g, cond in pairs:
+        fam = GROUP_TO_FAMILY[g]
+        fig, ax = plt.subplots(figsize=(6.2, 4.4))
+        r = rl[(rl.group == g) & (rl.condition == cond) &
+               (rl.alpha_mult == 1.0) & (rl.beta_mult == 1.0)].sort_values("sigma_mult")
+        ax.plot(r.sigma_mult, r.log_mean_pop, "o-", color="#569122", lw=2.2, ms=6,
+                label="learned (RL)", zorder=5)
+        b = bl[(bl.family == fam) & (bl.condition == cond) &
+               (bl.alpha_mult == 1.0) & (bl.beta_mult == 1.0)]
+        for pol, s in b.groupby("policy"):
+            s = s.sort_values("sigma_mult")
+            style = ":" if pol == "no_drug" else "-"
+            ax.plot(s.sigma_mult, s.log_mean_pop, style, marker=".", alpha=.75, label=pol)
+        ax.set_xlabel("sigma multiplier (damage-noise strength), alpha=beta=1")
+        ax.set_ylabel("log10 mean population  (lower = better)")
+        ax.grid(alpha=.3)
+        ax.legend(fontsize=7, ncol=2, loc="best", framealpha=.9)
+        fig.suptitle(f"{g}  (condition {cond}):  learned vs fixed protocols vs sigma",
+                     fontsize=12)
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        safe = f"{g.replace('->', '_')}_{str(cond).replace('.', 'p')}"
+        fig.savefig(os.path.join(OUT, f"sigma_marginal_{safe}.png"), dpi=130)
+        plt.close(fig)
+
+
+# per-family reference "null" protocol (the naive fixed strategy) + optional clever fixed
+# comparator, used by sigma_panels. The null is the weakest-suppression fixed protocol, so
+# "advantage over null" mirrors heat_advantage's constant-vs-pulse story per env:
+#   const/var -> constant (always-on drug);  control -> feast (always-fed nutrient).
+# comparator: best pulse for const, the other schedule (famine) for control, none for var.
+FAMILY_SIGMA = {
+    "const":   dict(null="constant", comp="best_pulse", comp_label="best pulse",
+                    title=lambda c: f"Constant Nutrient, c = {float(c):.2f}"),
+    "var":     dict(null="constant", comp=None, comp_label=None,
+                    title=lambda c: f"Varying Nutrient, T = {int(float(c))}"),
+    "control": dict(null="feast", comp="famine", comp_label="famine",
+                    title=lambda c: "Control (nutrient range 1–3)"),
+}
+
+
+def sigma_panels(rl, bl):
+    """heat_advantage-style condition panels for the sigma marginal, for every env group.
+
+    Per group, one row of panels -- one per nutrient condition, sigma on the x-axis (alpha=beta=1,
+    the plane over which sigma is swept) -- rendered as two figures:
+
+      sigma_advantage_<group>.png
+          y = log10 mean-pop[null] - log10 mean-pop[policy]  (>0: suppresses more than the naive
+          fixed protocol on the SAME bacteria). Line for RL, plus the clever fixed comparator
+          (best pulse / famine) where the env has one.
+      sigma_extinction_<group>.png
+          y = P(extinct), one line each for the null, the comparator (if any), and RL.
+
+    The per-env reference null + comparator come from FAMILY_SIGMA (const/var -> constant + best
+    pulse; control -> feast + famine; var has only constant, so just the RL line is drawn). For a
+    pulse comparator each figure picks the pulse on ITS OWN criterion: the advantage fig uses the
+    best suppressor (lowest mean-pop, matching best_fixed), the extinction fig uses the best
+    extinguisher (highest P(extinct), ties broken by mean-pop) -- these are different pulses,
+    since a short pulse can suppress the mean well yet seldom drive the population fully to zero.
+    For a single named comparator (famine) both picks collapse to that one protocol.
+    """
+    groups = [g for g in GROUP_ORDER if g in rl["group"].unique()]
+    for g in groups:
+        fam = GROUP_TO_FAMILY[g]
+        cfg = FAMILY_SIGMA[fam]
+        r = rl[(rl.group == g) & (rl.alpha_mult == 1.0) & (rl.beta_mult == 1.0)]
+        b = bl[(bl.family == fam) & (bl.alpha_mult == 1.0) & (bl.beta_mult == 1.0)]
+        rows = []
+        for cond in sorted(r["condition"].unique()):
+            rc = r[r.condition == cond].set_index("sigma_mult")
+            bc = b[b.condition == cond]
+            nullp = bc[bc.policy == cfg["null"]].set_index("sigma_mult")
+            if rc.empty or nullp.empty:
+                continue
+            # candidate comparator protocols. The advantage fig and the extinction fig can pick
+            # DIFFERENT members of this pool, because "lowest mean-pop" and "highest P(extinct)"
+            # are distinct objectives (a short pulse can suppress the mean well yet rarely fully
+            # extinguish). For a single named comparator (famine) both picks collapse to it.
+            if cfg["comp"] == "best_pulse":
+                pool = bc[bc.policy.str.startswith("pulse_h")]
+            elif cfg["comp"]:
+                pool = bc[bc.policy == cfg["comp"]]
+            else:
+                pool = None
+            sig = set(rc.index) & set(nullp.index)
+            if pool is not None and not pool.empty:
+                sig &= set(pool["sigma_mult"])
+            for s in sorted(sig):
+                row = dict(condition=cond, sigma=s,
+                           rl_lmp=rc.loc[s, "log_mean_pop"], rl_ext=rc.loc[s, "extinct"],
+                           null_lmp=nullp.loc[s, "log_mean_pop"], null_ext=nullp.loc[s, "extinct"])
+                if pool is not None and not pool.empty:
+                    cs = pool[pool["sigma_mult"] == s]
+                    sup = cs.loc[cs["log_mean_pop"].idxmin()]                  # best suppressor
+                    ext = cs.sort_values(["extinct", "log_mean_pop"],
+                                         ascending=[False, True]).iloc[0]      # best extinguisher
+                    row["comp_lmp"] = sup["log_mean_pop"]                      # -> advantage fig
+                    row["comp_ext"] = ext["extinct"]                          # -> extinction fig
+                rows.append(row)
+        d = pd.DataFrame(rows)
+        if d.empty:
+            continue
+        has_comp = "comp_lmp" in d.columns
+
+        def _cond_key(c):
+            try:
+                return (0, float(c))          # numeric conditions sort as numbers (T=6 before 12)
+            except (ValueError, TypeError):
+                return (1, str(c))            # non-numeric (e.g. control's "1_3") sort last, by str
+
+        conds = sorted(d.condition.unique(), key=_cond_key)
+        safe = g.replace("->", "_")
+        nlab, clab = cfg["null"], cfg["comp_label"]
+        # each figure names its comparator by the criterion it was selected on
+        adv_clab = "best pulse (min pop)" if cfg["comp"] == "best_pulse" else clab
+        ext_clab = "best pulse (max ext.)" if cfg["comp"] == "best_pulse" else clab
+        figw = 4.6 * len(conds)               # one panel per condition; no min (single panel stays square-ish)
+
+        # figure 1: suppression advantage over the naive fixed protocol
+        fig, axes = plt.subplots(1, len(conds), figsize=(figw, 3.8),
+                                 squeeze=False, sharey=True)
+        for ax, cond in zip(axes[0], conds):
+            s = d[d.condition == cond].sort_values("sigma")
+            ax.plot(s.sigma, s.null_lmp - s.rl_lmp, "o-", color="#569122", lw=2.2, ms=6,
+                    label="RL", zorder=5)
+            if has_comp:
+                ax.plot(s.sigma, s.null_lmp - s.comp_lmp, "s-", color="#3b6fb0", lw=2, ms=5,
+                        label=adv_clab)
+            ax.axhline(0, color="k", lw=.8, ls="--", alpha=.5)
+            ax.set_title(cfg["title"](cond), fontsize=11)
+            ax.set_xlabel("sigma multiplier")
+            ax.grid(alpha=.3)
+        axes[0][0].set_ylabel(f"advantage over {nlab}\nlog10 mp[{nlab}] - log10 mp[policy]")
+        axes[0][-1].legend(fontsize=8, loc="best", framealpha=.9)
+        fig.suptitle(f"{g}: advantage over {nlab}  (alpha=beta=1, >0 beats {nlab})", fontsize=10)
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        fig.savefig(os.path.join(OUT, f"sigma_advantage_{safe}.png"), dpi=130)
+        plt.close(fig)
+
+        # figure 2: extinction probability, null vs comparator vs RL
+        fig, axes = plt.subplots(1, len(conds), figsize=(figw, 3.8),
+                                 squeeze=False, sharey=True)
+        for ax, cond in zip(axes[0], conds):
+            s = d[d.condition == cond].sort_values("sigma")
+            ax.plot(s.sigma, s.null_ext, "^-", color="#b0553b", lw=2, ms=5, label=nlab)
+            if has_comp:
+                ax.plot(s.sigma, s.comp_ext, "s-", color="#3b6fb0", lw=2, ms=5, label=ext_clab)
+            ax.plot(s.sigma, s.rl_ext, "o-", color="#569122", lw=2.2, ms=6, label="RL", zorder=5)
+            ax.set_ylim(-0.03, 1.03)
+            ax.set_title(cfg["title"](cond), fontsize=11)
+            ax.set_xlabel("sigma multiplier")
+            ax.grid(alpha=.3)
+        axes[0][0].set_ylabel("P(extinct)")
+        axes[0][-1].legend(fontsize=8, loc="best", framealpha=.9)
+        fig.suptitle(f"{g}: P(extinct) vs sigma  (alpha=beta=1)", fontsize=10)
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        fig.savefig(os.path.join(OUT, f"sigma_extinction_{safe}.png"), dpi=130)
+        plt.close(fig)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     rl = load_rl()
@@ -201,6 +377,8 @@ def main():
                    "Extinction advantage: P(extinct)[RL] - P(extinct)[best fixed]  (>0: RL better)",
                    "heat_advantage_ext.png", fmt="+.2f")
     marginal_overlays(rl, bl, cmp)
+    sigma_marginal_overlays(rl, bl, cmp)
+    sigma_panels(rl, bl)
 
     # headline: nominal vs adversarial corner (alpha 0.8, beta 1.2), advantage preserved?
     # averaged over each group's nutrient conditions (see heat_advantage).
