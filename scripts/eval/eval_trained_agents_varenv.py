@@ -1,3 +1,40 @@
+"""Evaluate a trained agent on the variable-nutrient environment.
+
+Usage:
+    python eval_trained_agents_varenv.py \\
+        antibiotic_value T_k_n0 delay_embed_len rep_run rep_eval results_dir training_episode \\
+        [agent] [rnn_type] [net_arch] [train_unroll_len] [eval_out_base]
+
+Positional arguments:
+    antibiotic_value : float   antibiotic dose used for the b=1 action
+    T_k_n0           : int     nutrient-switching period of the eval env
+    delay_embed_len  : int     observation delay-embed length (use 1 for the RNN agent)
+    rep_run          : int     training replicate index (selects the trained-model folder)
+    rep_eval         : int     eval batch index (offsets the saved trial_* filenames)
+    results_dir      : str     directory holding the trained-model folders
+    training_episode : str     episode sub-folder of the checkpoint to load
+
+Optional arguments (default to the original MLP behaviour, so existing calls are unchanged):
+    agent            : "MLP" (default) or "RNN" (recurrent RNN_full / r2d2 agent)
+    rnn_type         : "LSTM" (default) or "GRU"  (only used when agent == "RNN")
+    net_arch         : "rnn" (default) or "encoder_decoder"  (only used when agent == "RNN")
+    train_unroll_len : int, default 20. Selects the RNN model folder (trial_name encodes
+                       "ul<n>"); must match how the model was trained. Ignored for MLP.
+    eval_out_base    : str, output base dir for eval results. Defaults to "{results_dir}_eval".
+                       Pass this to send eval output somewhere other than next to the model
+                       (e.g. to pool evals of models that live in different results_dirs).
+
+    The RNN options (rnn_type, net_arch, train_unroll_len) must match how the model was
+    trained: rnn_type/net_arch determine the network architecture that load_data() restores,
+    and all three select the trained-model folder, which the RNN training script tags with the
+    agent type and unroll length, e.g. "..._LSTM_ul20_rep0" or "..._LSTM_encdec_ul5_rep0".
+
+Output (written under "{eval_out_base}/{trial_name}/{training_episode}/",
+        eval_out_base defaulting to "{results_dir}_eval"):
+    trial_<n>tcbk.pkl : pickled eval-trajectory info dict, one per eval rep
+                        (n = rep_eval * num_of_reps_eval + i_eval)
+"""
+
 import os
 import sys
 import pickle
@@ -6,6 +43,7 @@ import numpy as np
 from rlBacterialControl.envs.cell_model import CellConfig
 from rlBacterialControl.envs.envs import EnvConfig, VariableNutrientEnv
 from rlBacterialControl.agent.MLP_full import CDQL
+from rlBacterialControl.agent.RNN_full import CDQL as CDQL_RNN
 
 
 MAIN = __name__ == "__main__"
@@ -20,11 +58,27 @@ if MAIN:
     results_dir = sys.argv[6]
     training_episode = sys.argv[7]
 
+    ## ----- optional agent selection (backward compatible: defaults to MLP) ----- ##
+    agent_type = sys.argv[8].upper() if len(sys.argv) > 8 else "MLP"
+    rnn_type = sys.argv[9].upper() if len(sys.argv) > 9 else "LSTM"
+    net_arch = sys.argv[10].lower() if len(sys.argv) > 10 else "rnn"  # "rnn" or "encoder_decoder"
+    # train_unroll_len selects the RNN model folder (trial_name encodes ul<n>); it must
+    # match how the model was trained. Ignored for MLP. Defaults to the training default (20).
+    train_unroll_len = int(sys.argv[11]) if len(sys.argv) > 11 else 20
+    eval_out_base = sys.argv[12] if len(sys.argv) > 12 else f"{results_dir}_eval"
+
     ## ----- wandb setting ----- ##
-    trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_rep{rep_run}"
+    if agent_type == "RNN":
+        # Mirror the RNN training script's folder tagging (rnn_type, "_encdec" suffix).
+        agent_tag = rnn_type
+        if net_arch == "encoder_decoder":
+            agent_tag += "_encdec"
+        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_{agent_tag}_ul{train_unroll_len}_rep{rep_run}"
+    else:
+        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_rep{rep_run}"
     folder_name = f"{results_dir}/{trial_name}/{training_episode}/"
     
-    eval_out = f"{results_dir}_eval/{trial_name}/{training_episode}/"
+    eval_out = f"{eval_out_base}/{trial_name}/{training_episode}/"
     os.makedirs(eval_out, exist_ok=True)
 
     ## ----- RL setting ----- ##
@@ -45,10 +99,14 @@ if MAIN:
     )
 
     env = VariableNutrientEnv(env_config, cell_config)
-    c = CDQL(env,
-             buffer_size = 1_000_000,
-             batch_size = 512,
-             use_gpu = use_gpu)
+    if agent_type == "RNN":
+        c = CDQL_RNN(env,
+                     use_gpu = use_gpu,
+                     rnn_type = rnn_type,
+                     net_arch = net_arch)
+    else:
+        c = CDQL(env,
+                 use_gpu = use_gpu)
         
     ## ----- RL evaluating ----- ##
     num_of_reps_eval = 10
