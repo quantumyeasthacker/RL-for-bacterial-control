@@ -26,6 +26,14 @@ class EnvConfig:
     b_observation: bool = True
     omega: float = 0.02
 
+    # signal type for the bacterial (population) observation and for the reward/cost.
+    # Both default to "growth_rate", which reproduces the original behavior exactly.
+    #   "growth_rate" : finite-difference log-growth rate (log N_t - log N_{t-1}) / delta_t
+    #   "log10_pop"   : base-10 log of the population count, log10(N_t)
+    # The nutrient (k_n0) and antibiotic (b) observation blocks are unaffected by this choice.
+    obs_type: str = "growth_rate"
+    reward_type: str = "growth_rate"
+
     # measurement imperfection parameters (real bacterial measurements are noisy and lagged)
     # both default to "off", so a zero-config env reproduces the original (perfect-sensing) behavior.
     meas_noise_std: float = 0.0 # std of log-normal multiplicative noise on the measured population count; 0 disables noise
@@ -67,6 +75,10 @@ class BaseEnv(object):
         self.k_n0_observation = env_config.k_n0_observation
         self.b_observation = env_config.b_observation
         self.omega = env_config.omega
+        self.obs_type = env_config.obs_type
+        self.reward_type = env_config.reward_type
+        assert self.obs_type in ("growth_rate", "log10_pop"), f"unknown obs_type: {self.obs_type}"
+        assert self.reward_type in ("growth_rate", "log10_pop"), f"unknown reward_type: {self.reward_type}"
 
         self.num_actions = env_config.num_actions
         self.b_actions = env_config.b_actions
@@ -126,37 +138,50 @@ class BaseEnv(object):
 
     def observation(self, num_cells_prev, num_cells, k_n0, b):
         num_cells = 1e-5 if num_cells == 0 else num_cells
-        growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
 
         # measurement noise: real population counts (OD/CFU) carry multiplicative error.
-        # Model it as log-normal noise on the count, N_meas = N_true * exp(eps). The agent
-        # observes the finite-difference growth rate, so eps propagates as
-        #   growth_rate_obs = growth_rate_true + (eps_t - eps_{t-1}) / delta_t.
-        # N_{t-1} is measured once but enters two consecutive estimates, hence the shared
-        # eps_{t-1} carried in self._prev_meas_log_noise (gives realistic correlated noise).
+        # Model it as log-normal noise on the count, N_meas = N_true * exp(eps).
+        meas_log_noise = np.random.normal(0, self.meas_noise_std) if self.meas_noise_std > 0 else 0.0
+
+        if self.obs_type == "log10_pop":
+            # base-10 log of the (noisy) measured population count: log10(N_meas) = log10(N_true) + eps/ln(10)
+            bact_signal = (np.log(num_cells) + meas_log_noise) / np.log(10)
+        else:  # "growth_rate" (default, original behavior)
+            # The agent observes the finite-difference growth rate, so eps propagates as
+            #   growth_rate_obs = growth_rate_true + (eps_t - eps_{t-1}) / delta_t.
+            # N_{t-1} is measured once but enters two consecutive estimates, hence the shared
+            # eps_{t-1} carried in self._prev_meas_log_noise (gives realistic correlated noise).
+            growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
+            if self.meas_noise_std > 0:
+                growth_rate = growth_rate + (meas_log_noise - self._prev_meas_log_noise) / self.delta_t
+            bact_signal = growth_rate
+
         if self.meas_noise_std > 0:
-            meas_log_noise = np.random.normal(0, self.meas_noise_std)
-            growth_rate = growth_rate + (meas_log_noise - self._prev_meas_log_noise) / self.delta_t
             self._prev_meas_log_noise = meas_log_noise
 
         self.num_cells_history.pop(0)
-        self.num_cells_history.append(growth_rate)
+        self.num_cells_history.append(bact_signal)
         self.k_n0_history.pop(0)
         self.k_n0_history.append(k_n0)
         self.b_history.pop(0)
         self.b_history.append(b)
 
         # time lag: the bacterial measurement reaches the agent meas_lag decision steps late,
-        # so it sees the growth-rate window ending meas_lag steps in the past. The drug-action
+        # so it sees the population signal window ending meas_lag steps in the past. The drug-action
         # history (b) and nutrient signal (k_n0) stay current -- the agent knows what it applied.
-        growth_rate_obs = self.num_cells_history[:self.delay_embed_len]
-        obs = growth_rate_obs + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
+        bact_obs = self.num_cells_history[:self.delay_embed_len]
+        obs = bact_obs + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
         return copy.deepcopy(obs)
 
     def reward(self, num_cells_prev, num_cells, b):
-        num_cells = 1e-5 if num_cells == 0 else num_cells
-        growth_rate = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t
-        cost = growth_rate # + self.omega*b**2 # adding nonlinear penalty for drug application
+        if self.reward_type == "log10_pop":
+            # minimize cumulative base-10 log population (drives the culture toward extinction).
+            # Floor at -5: any count below 1 cell (including extinction, count == 0) is
+            # treated as log10(N) == -5 rather than diverging to -inf.
+            cost = np.log10(num_cells) if num_cells >= 1 else -5.0
+        else:  # "growth_rate" (default, original behavior)
+            num_cells = 1e-5 if num_cells == 0 else num_cells
+            cost = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t # + self.omega*b**2 # nonlinear drug penalty
         return cost
 
     @property

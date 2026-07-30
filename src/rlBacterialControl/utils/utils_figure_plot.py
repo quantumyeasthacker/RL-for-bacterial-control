@@ -42,15 +42,16 @@ def plot_trajectory(info_list: Union[dict, list[dict]], episode: int, folder_nam
         
 
 
-def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_target, Q2_target):
-    # note, since total rewards are not discounted, should be different than Q value
+def plot_reward_Q_loss(reward, std, grad_update_num, loss, folder, Q1, Q2, Q1_target, Q2_target,
+                       reward_ylabel='ave. eval reward per step'):
+    # note, this eval reward is undiscounted, so it differs from the Q value
     figure, ax = plt.subplots(3,1)
     figure.subplots_adjust(hspace=.0)
     ax[0].plot(grad_update_num, reward, color='k')
     lb = np.array(reward) - np.array(std)
     ub = np.array(reward) + np.array(std)
     ax[0].fill_between(grad_update_num, lb, ub, color='k', alpha=0.4)
-    ax[0].set_ylabel('ave. total eval reward')
+    ax[0].set_ylabel(reward_ylabel)
 
     ax[1].plot(grad_update_num, Q1, color='rebeccapurple', label='min Q1')
     ax[1].plot(grad_update_num, Q2, color='#2ca02c', label='min Q2')

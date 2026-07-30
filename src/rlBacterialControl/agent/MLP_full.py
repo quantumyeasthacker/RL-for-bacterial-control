@@ -84,8 +84,8 @@ class CDQL(object):
         self.gradient_steps = gradient_steps
 
         self.loss = []
-        self.ave_sum_rewards = []
-        self.std_sum_rewards = []
+        self.ave_rewards = []   # per-step mean eval reward (mean over decisions, then over eval rollouts)
+        self.std_rewards = []
         self.ave_Q1 = []
         self.ave_Q2 = []
         self.ave_Q1_target = []
@@ -214,8 +214,11 @@ class CDQL(object):
                 self.evalulate(episode, num_decisions, num_evals, folder_name)
 
             if episode == episodes - 1:
-                plot_reward_Q_loss(self.ave_sum_rewards, self.std_sum_rewards, self.grad_updates, self.loss, folder_name,
-                                   self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target)
+                reward_ylabel = ("ave. eval reward per step" if self.env.reward_type == "log10_pop"
+                                 else "ave. total eval reward")
+                plot_reward_Q_loss(self.ave_rewards, self.std_rewards, self.grad_updates, self.loss, folder_name,
+                                   self.ave_Q1, self.ave_Q2, self.ave_Q1_target, self.ave_Q2_target,
+                                   reward_ylabel=reward_ylabel)
 
     def evalulate(self, episode: int, num_decisions: int, num_evals: int, folder_name: str) -> None:
         """Evaluate the model
@@ -235,7 +238,7 @@ class CDQL(object):
 
         results = Parallel(n_jobs=10)(delayed(self.eval_step)(num_decisions) for _ in range(num_evals))
         # results = [self.eval_step(num_decisions) for _ in range(num_evals)]
-        sum_rewards_all, min_Q_values_all, terminated_all, _, info_all = zip(*results)
+        agg_rewards_all, min_Q_values_all, terminated_all, _, info_all = zip(*results)
         ave_q1, ave_q2, ave_q1_target, ave_q2_target = np.mean(min_Q_values_all, axis=0)
 
         for terminated, info in zip(terminated_all, info_all):
@@ -260,8 +263,8 @@ class CDQL(object):
                 extinct_times.append(time[-1])
                 extinct_count += 1
 
-        self.ave_sum_rewards.append(np.mean(sum_rewards_all))
-        self.std_sum_rewards.append(np.std(sum_rewards_all))
+        self.ave_rewards.append(np.mean(agg_rewards_all))
+        self.std_rewards.append(np.std(agg_rewards_all))
         self.ave_Q1.append(ave_q1)
         self.ave_Q2.append(ave_q2)
         self.ave_Q1_target.append(ave_q1_target)
@@ -269,12 +272,14 @@ class CDQL(object):
         self.grad_updates.append(self.training_iter)
 
         # save results
-        ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.Inf
+        ave_ext_time = sum(extinct_times)/len(extinct_times) if len(extinct_times) > 0 else np.inf
         ave_max_cross_corr_kn0 = sum(max_cross_corr_kn0)/len(max_cross_corr_kn0) if len(max_cross_corr_kn0) > 0 else 0
         ave_corr_lag_kn0 = sum(lag_kn0)/len(lag_kn0) if len(lag_kn0) > 0 else 0
         ave_max_cross_corr_U = sum(max_cross_corr_U)/len(max_cross_corr_U) if len(max_cross_corr_U) > 0 else 0
         ave_corr_lag_U = sum(lag_U)/len(lag_U) if len(lag_U) > 0 else 0
         # log via wandb (skipped if wandb is not installed, e.g. during offline eval)
+        # metric name matches the aggregation: per-step mean for log10-pop, episode sum otherwise
+        reward_metric_name = "ave reward per step" if self.env.reward_type == "log10_pop" else "ave total reward"
         if wandb is not None:
             wandb.log({
                 "extinct_fraction": extinct_count/num_evals,
@@ -283,7 +288,7 @@ class CDQL(object):
                 "ave_corr_lag_kn0": ave_corr_lag_kn0,
                 "ave_max_cross_corr_U": ave_max_cross_corr_U,
                 "ave_corr_lag_U": ave_corr_lag_U,
-                "ave total reward": np.mean(sum_rewards_all),
+                reward_metric_name: np.mean(agg_rewards_all),
                 "ave min Q1": ave_q1
             })
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
@@ -303,7 +308,11 @@ class CDQL(object):
             if terminated or truncated:
                 break
         # return rewards, Q_values, terminated, truncated, info
-        return np.sum(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
+        # log10-pop reward does not telescope -> report the per-step MEAN (length-normalized, so
+        # rollouts of different length are comparable). Growth-rate reward telescopes to endpoints
+        # (already length-independent) -> report the episode SUM, as originally.
+        reward_agg = np.mean if self.env.reward_type == "log10_pop" else np.sum
+        return reward_agg(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
 
 
 def cross_correlation(sig1, sig2, max_cross_corr, lag):
