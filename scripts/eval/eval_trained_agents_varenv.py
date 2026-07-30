@@ -3,7 +3,8 @@
 Usage:
     python eval_trained_agents_varenv.py \\
         antibiotic_value T_k_n0 delay_embed_len rep_run rep_eval results_dir training_episode \\
-        [agent] [rnn_type] [net_arch] [train_unroll_len] [eval_out_base]
+        [agent] [rnn_type] [net_arch] [train_unroll_len] [eval_out_base] \\
+        [context_update_freq] [context_age]
 
 Positional arguments:
     antibiotic_value : float   antibiotic dose used for the b=1 action
@@ -23,6 +24,13 @@ Optional arguments (default to the original MLP behaviour, so existing calls are
     eval_out_base    : str, output base dir for eval results. Defaults to "{results_dir}_eval".
                        Pass this to send eval output somewhere other than next to the model
                        (e.g. to pool evals of models that live in different results_dirs).
+    context_update_freq : int, default 0. The slow proteome-context setting the model was
+                       TRAINED with. Must match: it sets the observation width, hence the
+                       network input size that load_data() restores. 0 = no context block.
+                       Also selects the model folder, which the training script tags
+                       "_ctx{freq}" (plus "noage" when the age was ablated).
+    context_age      : int, default 1. Whether the trained model also observed the normalized
+                       context age. Must match training (1 = yes, 0 = ablated).
 
     The RNN options (rnn_type, net_arch, train_unroll_len) must match how the model was
     trained: rnn_type/net_arch determine the network architecture that load_data() restores,
@@ -66,6 +74,16 @@ if MAIN:
     # match how the model was trained. Ignored for MLP. Defaults to the training default (20).
     train_unroll_len = int(sys.argv[11]) if len(sys.argv) > 11 else 20
     eval_out_base = sys.argv[12] if len(sys.argv) > 12 else f"{results_dir}_eval"
+    # context observation the model was TRAINED with; must match, since it sets the network
+    # input width that load_data() restores (0 = the model saw no context block).
+    context_update_freq = int(sys.argv[13]) if len(sys.argv) > 13 else 0
+    context_age = bool(int(sys.argv[14])) if len(sys.argv) > 14 else True
+
+    context_observation = context_update_freq > 0
+    # mirrors the training script's tagging: "_ctx<freq>" plus "noage" when the age was ablated
+    ctx_tag = ""
+    if context_observation:
+        ctx_tag = f"_ctx{context_update_freq}" + ("" if context_age else "noage")
 
     ## ----- wandb setting ----- ##
     if agent_type == "RNN":
@@ -73,9 +91,9 @@ if MAIN:
         agent_tag = rnn_type
         if net_arch == "encoder_decoder":
             agent_tag += "_encdec"
-        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_{agent_tag}_ul{train_unroll_len}_rep{rep_run}"
+        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_{agent_tag}_ul{train_unroll_len}{ctx_tag}_rep{rep_run}"
     else:
-        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}_rep{rep_run}"
+        trial_name = f"a{antibiotic_value:.2f}_T{T_k_n0}_delay{delay_embed_len}{ctx_tag}_rep{rep_run}"
     folder_name = f"{results_dir}/{trial_name}/{training_episode}/"
     
     eval_out = f"{eval_out_base}/{trial_name}/{training_episode}/"
@@ -96,6 +114,9 @@ if MAIN:
         k_n0_mean = 2.55,
         sigma_kn0 = 0.1,
         max_pop = np.inf,
+        context_observation = context_observation,
+        context_update_freq = max(context_update_freq, 1), # env requires >= 1 even when off
+        context_age_observation = context_age,
     )
 
     env = VariableNutrientEnv(env_config, cell_config)

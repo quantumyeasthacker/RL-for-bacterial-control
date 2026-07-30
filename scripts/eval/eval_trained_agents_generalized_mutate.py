@@ -5,7 +5,7 @@ Usage:
     python eval_trained_agents_generalized_mutate.py \\
         antibiotic_value trained_env delay_embed_len eval_env eval_variable \\
         rep_run rep_eval results_dir episodes training_episode mutate_prob \\
-        [agent] [rnn_type] [net_arch] [train_mutprob]
+        [agent] [rnn_type] [net_arch] [train_mutprob] [context_update_freq] [context_age]
 
 Positional arguments:
     antibiotic_value : float   antibiotic dose used for the b=1 action
@@ -27,16 +27,27 @@ Optional arguments (default to the original MLP behaviour, so existing calls are
     rnn_type         : "LSTM" (default) or "GRU"  (only used when agent == "RNN")
     net_arch         : "rnn" (default) or "encoder_decoder"  (only used when agent == "RNN")
     train_mutprob    : str, the TRAINING mutation probability baked into the trained-model
-                       folder name (e.g. "0.1"). REQUIRED when agent == "RNN". The RNN-mutate
-                       training script tags folders as
-                       "a{ab}_{env}_delay{d}_mutprob{train_mutprob}_{agent_tag}_rep{rep}".
+                       folder name (e.g. "0.1"). REQUIRED when agent == "RNN". Both mutate
+                       training scripts tag folders as
+                       "a{ab}_{env}_delay{d}_mutprob{train_mutprob}_{agent_tag}{ctx_tag}_rep{rep}".
                        Distinct from `mutate_prob` (the eval-time rate swept independently of
                        how the model was trained).
+                       For agent == "MLP" this also SELECTS THE FOLDER-NAMING SCHEME:
+                         omitted -> "a{ab}_{env}_delay{d}_episodes{episodes}_rep{rep}"
+                                    (models from run_w_wandb_single_generalized.py)
+                         given   -> "a{ab}_{env}_delay{d}_mutprob{p}_MLP{ctx_tag}_rep{rep}"
+                                    (models from run_w_wandb_single_varenv_mutate.py)
+    context_update_freq : int, default 0. The slow proteome-context setting the model was
+                       TRAINED with. Must match: it sets the observation width, hence the
+                       network input size that load_data() restores. 0 = no context block.
+    context_age      : int, default 1. Whether the trained model also observed the normalized
+                       context age. Must match training (1 = yes, 0 = ablated).
 
     The RNN options (rnn_type, net_arch) must match how the model was trained, since they
     determine the network architecture that load_data() restores, and (with train_mutprob)
     they select the trained-model folder. agent_tag = rnn_type, with "_encdec" appended when
-    net_arch == "encoder_decoder".
+    net_arch == "encoder_decoder". ctx_tag = "_ctx{freq}" (plus "noage" when context_age == 0),
+    or "" when context_update_freq == 0.
 
 Output (written under
         "{results_dir}_eval/{trial_name}_{eval_env}_{eval_variable}_mutprob{mutate_prob}/{training_episode}/"):
@@ -79,6 +90,16 @@ if MAIN:
     rnn_type = sys.argv[13].upper() if len(sys.argv) > 13 else "LSTM"
     net_arch = sys.argv[14].lower() if len(sys.argv) > 14 else "rnn"  # "rnn" or "encoder_decoder"
     train_mutprob = sys.argv[15] if len(sys.argv) > 15 else None
+    # context observation the model was TRAINED with; must match, since it sets the network
+    # input width that load_data() restores (0 = the model saw no context block).
+    context_update_freq = int(sys.argv[16]) if len(sys.argv) > 16 else 0
+    context_age = bool(int(sys.argv[17])) if len(sys.argv) > 17 else True
+
+    context_observation = context_update_freq > 0
+    # mirrors the training script's tagging: "_ctx<freq>" plus "noage" when the age was ablated
+    ctx_tag = ""
+    if context_observation:
+        ctx_tag = f"_ctx{context_update_freq}" + ("" if context_age else "noage")
 
     ## ----- wandb setting ----- ##
     if agent_type == "RNN":
@@ -88,8 +109,13 @@ if MAIN:
         agent_tag = rnn_type
         if net_arch == "encoder_decoder":
             agent_tag += "_encdec"
-        trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_mutprob{train_mutprob}_{agent_tag}_rep{rep_run}"
+        trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_mutprob{train_mutprob}_{agent_tag}{ctx_tag}_rep{rep_run}"
+    elif train_mutprob is not None:
+        # MLP model from run_w_wandb_single_varenv_mutate.py, which tags folders with the
+        # training mutation rate and an "MLP" agent token rather than "episodes<n>".
+        trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_mutprob{train_mutprob}_MLP{ctx_tag}_rep{rep_run}"
     else:
+        # MLP model from run_w_wandb_single_generalized.py (original naming, unchanged)
         trial_name = f"a{antibiotic_value:.2f}_{trained_env}_delay{delay_embed_len}_episodes{episodes}_rep{rep_run}"
     folder_name = f"{results_dir}/{trial_name}/{training_episode}/"
 
@@ -111,6 +137,9 @@ if MAIN:
             delay_embed_len = delay_embed_len,
             b_actions = [0, antibiotic_value],
             max_pop = np.inf,
+            context_observation = context_observation,
+            context_update_freq = max(context_update_freq, 1), # env requires >= 1 even when off
+            context_age_observation = context_age,
         )
         env = ConstantNutrientEnv(env_config, cell_config)
     elif eval_env == "varenv":
@@ -123,6 +152,9 @@ if MAIN:
             k_n0_mean = 2.55,
             sigma_kn0 = 0.1,
             max_pop = np.inf,
+            context_observation = context_observation,
+            context_update_freq = max(context_update_freq, 1), # env requires >= 1 even when off
+            context_age_observation = context_age,
         )
         env = VariableNutrientEnv(env_config, cell_config)
 
