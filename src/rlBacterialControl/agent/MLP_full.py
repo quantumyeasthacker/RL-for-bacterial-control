@@ -65,7 +65,7 @@ class CDQL(object):
 
         self.env = env
         self.model = Model(self.device,
-                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation),
+                           num_inputs = self.env.obs_len,
                            num_actions = self.env.num_actions,
                            learning_rate = learning_rate,
                            tau = network_update_rate)

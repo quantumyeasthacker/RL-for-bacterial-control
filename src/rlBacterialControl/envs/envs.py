@@ -39,6 +39,16 @@ class EnvConfig:
     meas_noise_std: float = 0.0 # std of log-normal multiplicative noise on the measured population count; 0 disables noise
     meas_lag: int = 0 # number of decision steps the bacterial (growth-rate) measurement is delayed; 0 disables lag
 
+    # slow physiological (proteome) context: the population-average stress-protein fraction
+    # phi_S_ave. Unlike the bacterial/nutrient/drug signals it is expensive to assay, so it is
+    # re-measured only every context_update_freq decision steps and held fixed in between.
+    # Defaults to "off", so a zero-config env reproduces the original observation exactly.
+    context_observation: bool = False # if True, append the latched context to the observation
+    context_update_freq: int = 50 # decision steps between context re-measurements
+    context_age_observation: bool = True # if True, also append the normalized age of the latched
+    # context (steps since it was last re-measured, divided by context_update_freq). Without it the
+    # refresh is an unobservable jump and the augmented state is not Markov; set False to ablate.
+
     num_actions: int = 2
     b_actions: list[int] = field(default_factory=list)
 
@@ -89,6 +99,11 @@ class BaseEnv(object):
         # extra values to be able to report a window that ends meas_lag steps in the past.
         self._meas_history_len = self.delay_embed_len + self.meas_lag
 
+        self.context_observation = env_config.context_observation
+        self.context_update_freq = env_config.context_update_freq
+        self.context_age_observation = env_config.context_age_observation
+        assert self.context_update_freq >= 1, "context_update_freq must be at least 1 decision step"
+
         self.iterations = int(env_config.delta_t * env_config.n_steps)
         if self.warm_up is None:
             warnings.warn("warm_up is not specified, setting warm_up to delay_embed_len + meas_lag.", category=UserWarning)
@@ -119,6 +134,31 @@ class BaseEnv(object):
         # noise on the count at step t-1 is shared by the growth-rate estimates at t-1 and t,
         # so we carry the previous measurement's log-noise realization across steps.
         self._prev_meas_log_noise = np.random.normal(0, self.meas_noise_std) if self.meas_noise_std > 0 else 0.0
+        # context latch. reset() replays warm_up steps before handing control to the agent, so the
+        # counter starts at -warm_up and reaches 0 on the first real decision step: the context is
+        # tracked freshly throughout warm-up and is therefore newly measured (age 0) at decision 0.
+        self._context = None
+        self._context_age = 0
+        self._context_step = -self.warm_up
+
+    def _latched_context(self):
+        """Returns the (context, normalized age) pair for the current step.
+        The context is the population-average stress-protein fraction phi_S_ave, re-measured only
+        every context_update_freq decision steps and held fixed in between (an expensive assay).
+        Age is the number of steps since that re-measurement, normalized by context_update_freq;
+        it tells the agent how stale the value it is conditioning on is.
+        """
+        # sim log entry layout: [t, k_n0, b, num_cells, U_ave, phi_R_ave, phi_S_ave] -- see
+        # Cell_Population.simulate_population/initialize in cell_model.py. Both append before
+        # observation() runs, so logger[-1] is always the current step.
+        phi_S_ave = self.sim_cells.logger[-1][6]
+        if self._context_step < 0 or self._context_step % self.context_update_freq == 0:
+            self._context = phi_S_ave
+            self._context_age = 0
+        else:
+            self._context_age += 1
+        self._context_step += 1
+        return self._context, self._context_age / self.context_update_freq
 
     def step(self, action):
         raise NotImplementedError
@@ -170,7 +210,16 @@ class BaseEnv(object):
         # so it sees the population signal window ending meas_lag steps in the past. The drug-action
         # history (b) and nutrient signal (k_n0) stay current -- the agent knows what it applied.
         bact_obs = self.num_cells_history[:self.delay_embed_len]
-        obs = bact_obs + self.k_n0_history * self.k_n0_observation + self.b_history * self.b_observation
+
+        # slow proteome context: appended once, NOT delay-embedded like the blocks above -- it is
+        # held fixed between refreshes, so a delay window would just repeat the same value.
+        context_obs = []
+        if self.context_observation:
+            context, context_age = self._latched_context()
+            context_obs = [context] + [context_age] * self.context_age_observation
+
+        obs = (bact_obs + self.k_n0_history * self.k_n0_observation
+               + self.b_history * self.b_observation + context_obs)
         return copy.deepcopy(obs)
 
     def reward(self, num_cells_prev, num_cells, b):
@@ -183,6 +232,16 @@ class BaseEnv(object):
             num_cells = 1e-5 if num_cells == 0 else num_cells
             cost = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t # + self.omega*b**2 # nonlinear drug penalty
         return cost
+
+    @property
+    def obs_len(self):
+        """Length of the observation vector returned by observation().
+        Single source of truth for the agents' network input dimension -- the bacterial,
+        nutrient and drug blocks are delay-embedded, the context block is not.
+        """
+        return (self.delay_embed_len * (1 + self.k_n0_observation + self.b_observation)
+                + self.context_observation
+                + (self.context_observation and self.context_age_observation))
 
     @property
     def terminated(self):

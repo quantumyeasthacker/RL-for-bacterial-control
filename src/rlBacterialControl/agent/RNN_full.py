@@ -14,8 +14,10 @@ package's training/eval ecosystem:
 Unlike the MLP agent, temporal memory is supplied by the RNN hidden state rather than
 delay embedding, so the env is normally configured with ``delay_embed_len = 1`` (the
 per-step observation is then ``[growth_rate, (k_n0), (b)]``). Larger ``delay_embed_len``
-still works without modification: ``num_inputs`` simply grows to
-``delay_embed_len * (1 + k_n0_observation + b_observation)``.
+still works without modification: ``num_inputs`` is taken from ``env.obs_len``, which also
+covers the optional slow-proteome context block (``context_observation``), so the recurrent
+agent picks up the context with no changes here -- the per-step observation simply becomes
+``[growth_rate, (k_n0), (b), phi_S, (context_age)]``.
 
 Usage:
     from rlBacterialControl.envs.envs import EnvConfig, VariableNutrientEnv
@@ -108,9 +110,7 @@ class CDQL(object):
         self.train_unroll_len = train_unroll_len
         self.net_arch = net_arch
 
-        num_inputs = self.env.delay_embed_len * (
-            1 + self.env.k_n0_observation + self.env.b_observation
-        )
+        num_inputs = self.env.obs_len
         if net_arch == "rnn":
             ModelClass = ModelRNN
         elif net_arch == "encoder_decoder":
