@@ -24,12 +24,13 @@ if MAIN:
 
     cell_config = CellConfig(mutate=True, mutate_prob=mutate_prob)
 
-    env_config = EnvConfig(
-        delay_embed_len = 30,
-        b_actions = [0, antibiotic_value],
-        max_pop = np.Inf,
-        k_n0_mean = 2.55,
-    )
+    # is this section below dead? 
+    # env_config = EnvConfig(
+    #     delay_embed_len = 30,
+    #     b_actions = [0, antibiotic_value],
+    #     max_pop = np.inf,
+    #     k_n0_mean = 2.55,
+    # )
 
     if eval_env == "constenv":
         env_config = EnvConfig(

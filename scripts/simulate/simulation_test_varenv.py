@@ -23,16 +23,32 @@ if MAIN:
     # nutrient_value = 0.5
     # rep = 0
 
+    # positional args:
+    #   1 half_period  2 initialize_app  3 antibiotic_value  4 T_k_n0  5 rep  6 results_dir
+    # optional CellConfig sweep args (added for the env-parameter sensitivity sweep):
+    #   7 cell_param   8 cell_pct
+    # When cell_param/cell_pct are given, one CellConfig field is overridden to
+    # default * (1 + cell_pct/100) and the folder name gains a "_{param}_{+pct}pct" token.
     half_period = int(sys.argv[1])
     initialize_app = sys.argv[2]
     antibiotic_value = float(sys.argv[3])
     T_k_n0 = int(sys.argv[4])
     rep = int(sys.argv[5])
     results_dir = sys.argv[6]
+    cell_param = sys.argv[7] if len(sys.argv) > 7 else None
+    cell_pct = int(sys.argv[8]) if len(sys.argv) > 8 else 0
 
     num_decisions = 300
 
-    cell_config = CellConfig()
+    if cell_param is not None:
+        default_val = getattr(CellConfig(), cell_param)
+        new_val = default_val * (1 + cell_pct / 100)
+        cell_config = CellConfig(**{cell_param: new_val})
+        sweep_tag = f"_{cell_param}_{cell_pct:+d}pct"
+        print(f"CellConfig override: {cell_param} {default_val} -> {new_val} ({cell_pct:+d}%)")
+    else:
+        cell_config = CellConfig()
+        sweep_tag = ""
     env_config = EnvConfig(
         delay_embed_len = 30,
         b_actions = [0, antibiotic_value],
@@ -49,7 +65,7 @@ if MAIN:
 
     env = VariableNutrientEnv(env_config, cell_config)
 
-    folder_name=f"{results_dir}/a{antibiotic_value:.2f}_T{T_k_n0}_value_check/{initialize_app}_{half_period}/"
+    folder_name=f"{results_dir}/a{antibiotic_value:.2f}_T{T_k_n0}{sweep_tag}_value_check/{initialize_app}_{half_period}/"
     os.makedirs(folder_name, exist_ok=True)
 
     if initialize_app == "low":
