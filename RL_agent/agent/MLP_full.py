@@ -32,7 +32,8 @@ class CDQL(object):
         train_freq: int = 1,
         gradient_steps: int = 1,
         use_gpu: bool = False,
-        context_update_freq: int = 50
+        context_update_freq: int = 50,
+        context_age_observation: bool = True
     ) -> None:
         '''
         Args:
@@ -47,6 +48,12 @@ class CDQL(object):
             gradient_steps: number of gradient steps to take each update
             use_gpu: whether to use gpu
             context_update_freq: frequency of context update
+            context_age_observation: if True, append the normalized context age (steps since
+                the context was last re-measured, divided by context_update_freq) to the
+                observation. The context is only refreshed every context_update_freq steps,
+                so without the age the refresh looks like an unpredictable jump to the Q
+                networks and the augmented state (obs, context) is not Markov. Set False to
+                ablate (reproduces the pre-age observation, one input dimension smaller).
         '''
         if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
             self.device = torch.device('cuda')
@@ -55,8 +62,11 @@ class CDQL(object):
         assert (not use_gpu) or (self.device == torch.device('cuda'))
 
         self.env = env
+        self.context_age_observation = context_age_observation
+        # observation the env returns, before the context-age feature is appended
+        self.env_obs_len = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation)
         self.model = Model(self.device,
-                           num_inputs = self.env.delay_embed_len*(1 + self.env.k_n0_observation + self.env.b_observation),
+                           num_inputs = self.env_obs_len + int(self.context_age_observation),
                            num_actions = self.env.num_actions,
                            dim_context = self.env.dim_context)
 
@@ -86,6 +96,19 @@ class CDQL(object):
 
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
+
+    def _augment_obs(self, obs, context_age):
+        """Appends the normalized context age to the observation.
+        The context is held fixed between refreshes, so the age tells the Q networks how
+        stale the context they are conditioning on is -- without it the refresh is an
+        unobservable jump and the augmented state (obs, context) is not Markov.
+        Args:
+            obs: observation returned by the env
+            context_age: number of steps since the context was last re-measured
+        """
+        if not self.context_age_observation:
+            return obs
+        return list(obs) + [context_age / self.context_update_freq]
 
     def _save_data(self, folder_name, replay_buffer = False):
         os.makedirs(folder_name, exist_ok=True)
@@ -171,18 +194,28 @@ class CDQL(object):
 
         step_iter = 0
         for episode in range(episodes):
-            obs, hidden_context, _ = self.env.reset()
+            obs, real_context, _ = self.env.reset()
+            obs_context = obs_context_next = real_context
+            context_age = context_age_next = 0
             for i in range(num_decisions):
-                # updating context periodically
-                if i % self.context_update_freq == 0:
-                    context = hidden_context
-                action = self.model.get_action(obs, context, deterministic = False, epsilon = epsilon_list[episode])
-                obs_next, context_next, reward, terminated, truncated, _ = self.env.step(action)
-                self.buffer.push(obs, context, action, reward, obs_next, context_next, terminated)
+
+                obs_aug = self._augment_obs(obs, context_age)
+                action = self.model.get_action(obs_aug, obs_context, deterministic = False, epsilon = epsilon_list[episode])
+                obs_next, real_context_next, reward, terminated, truncated, _ = self.env.step(action)
+
+                # updating context periodically, resetting its age when it is re-measured
+                if i % self.context_update_freq == 0 and i != 0:
+                    obs_context_next = real_context_next
+                    context_age_next = 0
+                else:
+                    context_age_next = context_age + 1
+
+                obs_next_aug = self._augment_obs(obs_next, context_age_next)
+                self.buffer.push(obs_aug, obs_context, action, reward, obs_next_aug, obs_context_next, terminated)
                 step_iter += 1
                 if step_iter % self.train_freq == 0:
                     self._update()
-                obs, hidden_context = obs_next, context_next
+                obs, obs_context, context_age = obs_next, obs_context_next, context_age_next
                 if terminated or truncated:
                     break
             print(f"Episode {episode} completed.")
@@ -267,19 +300,30 @@ class CDQL(object):
         plot_trajectory(random.sample(info_all, 5), episode, os.path.join(folder_name,"Eval"))
 
     def eval_step(self, num_decisions: int) -> tuple[list, list, bool, bool, dict]:
-        obs, hidden_context, _ = self.env.reset()
-        rewards = []
-        Q_values = []
+        obs, real_context, _ = self.env.reset()
+        obs_context = obs_context_next = real_context
+        context_age = context_age_next = 0
+        rewards, Q_values = [], []
+
         for i in range(num_decisions):
-            if i % self.context_update_freq == 0:
-                context = hidden_context
-            action = self.model.get_action(obs, context, deterministic = True)
-            obs_tensor = self._to_tensor(obs).unsqueeze(0)
-            context_tensor = self._to_tensor(context)
+
+            obs_aug = self._augment_obs(obs, context_age)
+            action = self.model.get_action(obs_aug, obs_context, deterministic = True)
+            obs_tensor = self._to_tensor(obs_aug).unsqueeze(0)
+            context_tensor = self._to_tensor(obs_context)
             context_tensor = context_tensor.unsqueeze(0) if context_tensor.dim() == 0 else context_tensor
             with torch.no_grad():
                 Q_value = [q(obs_tensor,context_tensor.unsqueeze(0)) for q in self.model.q_networks]
-            obs, hidden_context, reward, terminated, truncated, info = self.env.step(action)
+            obs_next, real_context_next, reward, terminated, truncated, info = self.env.step(action)
+
+            # updating context periodically, resetting its age when it is re-measured
+            if i % self.context_update_freq == 0 and i != 0:
+                obs_context_next = real_context_next
+                context_age_next = 0
+            else:
+                context_age_next = context_age + 1
+            obs, obs_context, context_age = obs_next, obs_context_next, context_age_next
+
             rewards.append(reward)
             Q_values.append(Q_value)
             if terminated or truncated:

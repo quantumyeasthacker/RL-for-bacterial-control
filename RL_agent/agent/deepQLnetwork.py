@@ -82,7 +82,7 @@ class Model(object):
         """
         assert len(obs) == self.num_inputs
         context = [context] if isinstance(context,(float,int)) else context
-        assert len([context]) == self.dim_context
+        assert len(context) == self.dim_context
         self.q_1.eval()
         self.q_2.eval()
 
