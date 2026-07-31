@@ -1,3 +1,35 @@
+"""Fixed-protocol (non-agent) baseline rollouts under cell mutation.
+
+Applies a hardcoded decision sequence -- "constant" = antibiotic on for every decision --
+to the constant- or variable-nutrient env, and pickles one info dict per rollout. Used as
+the reference P_constant in the relative-performance metric
+(rel. perf. = log P_constant - log P_policy).
+
+Usage:
+    python simulation_test_mutate.py \
+        half_period antibiotic_value eval_env eval_variable rep results_dir mutate_prob [max_pop]
+
+Positional args:
+    half_period      : int   folder label only for the "constant" protocol (use 0)
+    antibiotic_value : float drug level applied when ON (b_actions = [0, a])
+    eval_env         : str   "constenv" or "varenv"
+    eval_variable    : str   constenv: constant k_n0; varenv: switching period T
+    rep              : int   batch index; this call writes trials rep*10 .. rep*10+9
+    results_dir      : str   parent output directory
+    mutate_prob      : float per-division mutation probability (CellConfig mutate=True)
+Optional positional args:
+    max_pop          : float population cap that TRUNCATES a rollout, default EnvConfig's
+                       1e11. Pass "inf" to disable it so every rollout runs the full 300
+                       decisions. This MUST match the agent eval it will be compared against
+                       -- eval_trained_agents_*.py use max_pop = inf, and a cap censors the
+                       baseline's final population (biasing log P_constant downward) in
+                       exactly the runaway trials that a mutation sweep is measuring.
+
+Output (under results_dir/):
+    a<antibiotic>_<eval_env>_<eval_variable>_mutprob<rate>_value_check/constant_<half_period>/
+        trial_<n>tcbk.pkl  (n = rep*10 .. rep*10+9), pickled env info dict per rollout
+"""
+
 import os
 import numpy as np
 import sys
@@ -19,6 +51,9 @@ if MAIN:
     rep = int(sys.argv[5])
     results_dir = sys.argv[6]
     mutate_prob = float(sys.argv[7])
+    # population cap that truncates a rollout; "inf" disables it. Must match the agent eval
+    # this baseline is compared against (see the module docstring).
+    max_pop = float(sys.argv[8]) if len(sys.argv) > 8 else EnvConfig.max_pop
 
     num_decisions = 300
 
@@ -35,7 +70,8 @@ if MAIN:
     if eval_env == "constenv":
         env_config = EnvConfig(
             k_n0_constant = float(eval_variable),
-            b_actions = [0, antibiotic_value]
+            b_actions = [0, antibiotic_value],
+            max_pop = max_pop
         )
         env = ConstantNutrientEnv(env_config, cell_config)
     elif eval_env == "varenv":
@@ -43,7 +79,8 @@ if MAIN:
             b_actions = [0, antibiotic_value],
             T_k_n0 = int(eval_variable),
             k_n0_mean = 2.55,
-            sigma_kn0 = 0.1
+            sigma_kn0 = 0.1,
+            max_pop = max_pop
         )
         env = VariableNutrientEnv(env_config, cell_config)
 
