@@ -5,7 +5,8 @@ Usage:
     python eval_trained_agents_generalized_mutate.py \\
         antibiotic_value trained_env delay_embed_len eval_env eval_variable \\
         rep_run rep_eval results_dir episodes training_episode mutate_prob \\
-        [agent] [rnn_type] [net_arch] [train_mutprob] [context_update_freq] [context_age]
+        [agent] [rnn_type] [net_arch] [train_mutprob] [context_update_freq] [context_age] \\
+        [context_signal] [num_decisions]
 
 Positional arguments:
     antibiotic_value : float   antibiotic dose used for the b=1 action
@@ -42,12 +43,31 @@ Optional arguments (default to the original MLP behaviour, so existing calls are
                        network input size that load_data() restores. 0 = no context block.
     context_age      : int, default 1. Whether the trained model also observed the normalized
                        context age. Must match training (1 = yes, 0 = ablated).
+    context_signal   : str, default "phi_S". WHAT the context block carried during training:
+                         "phi_S"        the population-average stress-protein fraction
+                         "phiS_max"     the population-average evolvable ceiling (the trait
+                                        mutation actually acts on)
+                         "noise"        the information-free control (independent draw,
+                                        calibrated to phi_S's marginal)
+                         "noise_phiSmax" the information-free control calibrated to phiS_max's
+                                        marginal -- use this one against a "phiS_max" arm
+                       MUST match training. All variants share the same observation width, so a
+                       mismatch does NOT raise: it silently loads the wrong model (the ctx_tag
+                       resolves to a different folder) and/or feeds the wrong signal.
+    num_decisions    : int, default 300. Decision steps per eval rollout (each is delta_t = 0.2 h,
+                       so 300 -> 60 h of control after the 12 h warm-up). MUST match the
+                       constant-antibiotic baseline it is compared against -- the relative-
+                       performance metric time-averages the population over the decision phase,
+                       so differing horizons are not comparable. Note the eval OUTPUT PATH does
+                       not encode this, so run a non-default horizon into its own results_dir
+                       (e.g. via symlinked model folders) or it will overwrite the 300-step data.
 
     The RNN options (rnn_type, net_arch) must match how the model was trained, since they
     determine the network architecture that load_data() restores, and (with train_mutprob)
     they select the trained-model folder. agent_tag = rnn_type, with "_encdec" appended when
-    net_arch == "encoder_decoder". ctx_tag = "_ctx{freq}" (plus "noage" when context_age == 0),
-    or "" when context_update_freq == 0.
+    net_arch == "encoder_decoder". ctx_tag = "_ctx{freq}", plus "noage" when context_age == 0,
+    plus "rand"/"randPhiSmax"/"phiSmax" for context_signal "noise"/"noise_phiSmax"/"phiS_max";
+    "" when context_update_freq == 0.
 
 Output (written under
         "{results_dir}_eval/{trial_name}_{eval_env}_{eval_variable}_mutprob{mutate_prob}/{training_episode}/"):
@@ -94,12 +114,24 @@ if MAIN:
     # input width that load_data() restores (0 = the model saw no context block).
     context_update_freq = int(sys.argv[16]) if len(sys.argv) > 16 else 0
     context_age = bool(int(sys.argv[17])) if len(sys.argv) > 17 else True
+    context_signal = sys.argv[18] if len(sys.argv) > 18 else "phi_S"  # can also be "noise" or "phiS_max"
+    # decision steps per eval rollout. MUST match the constant-antibiotic baseline this eval is
+    # compared against (simulation_test_mutate.py's num_decisions): the relative-performance
+    # metric time-averages the population over the decision phase, so a policy evaluated over a
+    # different horizon than its baseline is not comparable.
+    num_decisions = int(sys.argv[19]) if len(sys.argv) > 19 else 300
 
     context_observation = context_update_freq > 0
     # mirrors the training script's tagging: "_ctx<freq>" plus "noage" when the age was ablated
     ctx_tag = ""
     if context_observation:
         ctx_tag = f"_ctx{context_update_freq}" + ("" if context_age else "noage")
+        if context_signal == "noise":
+            ctx_tag += "rand"   # control arm which lacks dynamic readout, only gives average
+        elif context_signal == "noise_phiSmax":
+            ctx_tag += "randPhiSmax"  # same control, calibrated to the phiS_max marginal instead
+        elif context_signal == "phiS_max":
+            ctx_tag += "phiSmax"    # tracking phiS_max_ave instead of phiS_ave, thus directly tracking mutating value
 
     ## ----- wandb setting ----- ##
     if agent_type == "RNN":
@@ -140,6 +172,7 @@ if MAIN:
             context_observation = context_observation,
             context_update_freq = max(context_update_freq, 1), # env requires >= 1 even when off
             context_age_observation = context_age,
+            context_signal = context_signal
         )
         env = ConstantNutrientEnv(env_config, cell_config)
     elif eval_env == "varenv":
@@ -155,6 +188,7 @@ if MAIN:
             context_observation = context_observation,
             context_update_freq = max(context_update_freq, 1), # env requires >= 1 even when off
             context_age_observation = context_age,
+            context_signal = context_signal
         )
         env = VariableNutrientEnv(env_config, cell_config)
 
@@ -171,7 +205,7 @@ if MAIN:
     num_of_reps_eval = 10
     c.load_data(folder_name, False)
     for i_eval in range(num_of_reps_eval):
-        _, _, _, _, info = c.eval_step(num_decisions=300)
+        _, _, _, _, info = c.eval_step(num_decisions=num_decisions)
         fname=f"trial_{rep_eval*num_of_reps_eval+i_eval}"
         with open(os.path.join(eval_out, str(fname)+'tcbk.pkl'), "wb") as f:
             pickle.dump(info, f)
