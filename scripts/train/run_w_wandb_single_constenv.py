@@ -5,6 +5,8 @@ import wandb
 from rlBacterialControl.envs.cell_model import CellConfig
 from rlBacterialControl.envs.envs import EnvConfig, ConstantNutrientEnv
 from rlBacterialControl.agent.MLP_full import CDQL
+from rlBacterialControl.agent.RNN_full import CDQL as CDQL_RNN
+from rlBacterialControl import wandb_auth
 
 
 MAIN = __name__ == "__main__"
@@ -16,6 +18,8 @@ if MAIN:
     delay_embed_len = int(sys.argv[3])
     rep = int(sys.argv[4])
     results_dir = sys.argv[5]
+    # optional trailing arg: "MLP" (default) or "RNN" to train the recurrent RNN_full agent
+    agent_type = sys.argv[6].upper() if len(sys.argv) > 6 else "MLP"
 
     ## ----- wandb setting ----- ##
     trial_name = "a%.2f_n%.2f_delay%d_rep%d"%(antibiotic_value, nutrient_value, delay_embed_len, rep)
@@ -25,14 +29,16 @@ if MAIN:
     wandb_config = {"antibiotic_value": antibiotic_value,
                     "nutrient_value": nutrient_value,
                     "delay_embed_len": delay_embed_len,
-                    "rep": rep}
+                    "rep": rep,
+                    "agent_type": agent_type}
     
-    wandb.login(key = "a566d3654abf3ddf6060c24afc0e67fb4dd30c7a")
-    wandb.init(project="antibioticRL-constant-nutrient-delays-record",
-               dir=folder_name,
-               name=str(trial_name),
-               config=wandb_config,
-               settings=wandb.Settings(symlink=False))
+    # credentials come from ~/.config/wandb_rl/credentials.json (or $WANDB_CREDENTIALS),
+    # else $WANDB_API_KEY/$WANDB_ENTITY, else the local ~/.netrc from `wandb login`.
+    wandb_auth.init(project="antibioticRL-constant-nutrient-delays-record",
+                    dir=folder_name,
+                    name=str(trial_name),
+                    config=wandb_config,
+                    settings=wandb.Settings(symlink=False))
     
     ## ----- RL setting ----- ##
     k_n0_observation = False
@@ -52,13 +58,23 @@ if MAIN:
     )
 
     env = ConstantNutrientEnv(env_config, cell_config)
-    c = CDQL(env,
-             buffer_size = 1_000_000,
-             batch_size = 512,
-             train_freq = 1,
-             gradient_steps = 1,
-             use_gpu = use_gpu)
-    
+    if agent_type == "RNN":
+        c = CDQL_RNN(env,
+                     buffer_size = 1_000_000,
+                     batch_size = 512,
+                     train_freq = 1,
+                     gradient_steps = 1,
+                     use_gpu = use_gpu,
+                     rnn_type = "LSTM",  # recurrent cell for RNN_full
+                     train_unroll_len = 20)   # R2D2 unroll length
+    else:
+        c = CDQL(env,
+                 buffer_size = 1_000_000,
+                 batch_size = 512,
+                 train_freq = 1,
+                 gradient_steps = 1,
+                 use_gpu = use_gpu)
+
     ## ----- RL training ----- ##
     c.train(episodes=400,
             num_decisions=300,
