@@ -16,7 +16,7 @@ class ReplayBuffer:
         If buffer is full (i.e. more than self. capacity) add new samples to beginning of
         replay buffer
         Args:
-            state: state of system
+            state: observed state of system
             action: current action
             reward: observed reward
             next_state: next state of system
