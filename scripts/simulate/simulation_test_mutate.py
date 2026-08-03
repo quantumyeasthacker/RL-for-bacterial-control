@@ -7,7 +7,8 @@ the reference P_constant in the relative-performance metric
 
 Usage:
     python simulation_test_mutate.py \
-        half_period antibiotic_value eval_env eval_variable rep results_dir mutate_prob [max_pop]
+        half_period antibiotic_value eval_env eval_variable rep results_dir mutate_prob \
+        [max_pop] [num_decisions]
 
 Positional args:
     half_period      : int   folder label only for the "constant" protocol (use 0)
@@ -24,6 +25,10 @@ Optional positional args:
                        -- eval_trained_agents_*.py use max_pop = inf, and a cap censors the
                        baseline's final population (biasing log P_constant downward) in
                        exactly the runaway trials that a mutation sweep is measuring.
+    num_decisions    : int, default 300. Decision steps per rollout (each delta_t = 0.2 h, so
+                       300 -> 60 h of control after the 12 h warm-up). MUST match the agent eval
+                       this baseline is paired with; the output path does not encode it, so run a
+                       non-default horizon into its own results_dir.
 
 Output (under results_dir/):
     a<antibiotic>_<eval_env>_<eval_variable>_mutprob<rate>_value_check/constant_<half_period>/
@@ -54,8 +59,10 @@ if MAIN:
     # population cap that truncates a rollout; "inf" disables it. Must match the agent eval
     # this baseline is compared against (see the module docstring).
     max_pop = float(sys.argv[8]) if len(sys.argv) > 8 else EnvConfig.max_pop
-
-    num_decisions = 300
+    # decision steps per rollout. MUST match the agent eval this baseline is compared against
+    # (eval_trained_agents_generalized_mutate.py's num_decisions), since the relative-performance
+    # metric time-averages the population over the decision phase.
+    num_decisions = int(sys.argv[9]) if len(sys.argv) > 9 else 300
 
     cell_config = CellConfig(mutate=True, mutate_prob=mutate_prob)
 
