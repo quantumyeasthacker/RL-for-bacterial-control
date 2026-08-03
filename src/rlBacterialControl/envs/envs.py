@@ -49,6 +49,31 @@ class EnvConfig:
     # context (steps since it was last re-measured, divided by context_update_freq). Without it the
     # refresh is an unobservable jump and the augmented state is not Markov; set False to ablate.
 
+    # what the context block actually carries:
+    #   "phi_S"         population-average stress-protein fraction (fast physiological state)
+    #   "phiS_max"      population-average evolvable ceiling -- the trait mutation acts on
+    #   "noise"         INFORMATION-FREE CONTROL for a phi_S arm
+    #   "noise_phiSmax" INFORMATION-FREE CONTROL for a phiS_max arm
+    # A noise arm is an independent draw with the same marginal as the signal it controls for,
+    # latched and aged identically, so the observation has the same width and statistics but
+    # carries no information about the population. It separates "the signal is informative"
+    # from "two extra input units helped".
+    #
+    # The two signals have very different marginals, so each noise arm needs its own moments --
+    # pairing a phiS_max arm against phi_S-calibrated noise would confound the comparison with
+    # a large input-scale difference. Both sets were measured over the decision phase of ctx50
+    # evals at mutation rates 0.111/0.222:
+    #   phi_S     mean 0.0766  sd 0.0622   support [0, phiS_max]
+    #   phiS_max  mean 0.3622  sd 0.0330   support [0, phiS_max*scale]  (extinct-population
+    #             samples, where the mean falls back to 0, excluded -- 0.2% of samples)
+    # Draws are clipped to the corresponding support. Re-measure with
+    # scripts/eval/calib_phiSmax_marginal.sbatch if the training conditions change.
+    context_signal: str = "phi_S"
+    context_noise_mean: float = 0.0766          # phi_S-calibrated
+    context_noise_std: float = 0.0622
+    context_noise_mean_phiSmax: float = 0.3622  # phiS_max-calibrated
+    context_noise_std_phiSmax: float = 0.0330
+
     num_actions: int = 2
     b_actions: list[int] = field(default_factory=list)
 
@@ -102,7 +127,14 @@ class BaseEnv(object):
         self.context_observation = env_config.context_observation
         self.context_update_freq = env_config.context_update_freq
         self.context_age_observation = env_config.context_age_observation
+        self.context_signal = env_config.context_signal
+        self.context_noise_mean = env_config.context_noise_mean
+        self.context_noise_std = env_config.context_noise_std
+        self.context_noise_mean_phiSmax = env_config.context_noise_mean_phiSmax
+        self.context_noise_std_phiSmax = env_config.context_noise_std_phiSmax
         assert self.context_update_freq >= 1, "context_update_freq must be at least 1 decision step"
+        assert self.context_signal in ("phi_S", "phiS_max", "noise", "noise_phiSmax"), \
+            f"unknown context_signal: {self.context_signal}"
 
         self.iterations = int(env_config.delta_t * env_config.n_steps)
         if self.warm_up is None:
@@ -143,17 +175,34 @@ class BaseEnv(object):
 
     def _latched_context(self):
         """Returns the (context, normalized age) pair for the current step.
-        The context is the population-average stress-protein fraction phi_S_ave, re-measured only
-        every context_update_freq decision steps and held fixed in between (an expensive assay).
-        Age is the number of steps since that re-measurement, normalized by context_update_freq;
-        it tells the agent how stale the value it is conditioning on is.
+        The context is a slow physiological readout -- phi_S_ave (current stress-protein
+        fraction) or phiS_max_ave (the evolvable ceiling mutation acts on), per context_signal --
+        re-measured only every context_update_freq decision steps and held fixed in between (an
+        expensive assay). The "noise*" variants substitute an information-free draw matched to
+        the corresponding marginal. Age is the number of steps since the last re-measurement,
+        normalized by context_update_freq; it tells the agent how stale its value is.
         """
-        # sim log entry layout: [t, k_n0, b, num_cells, U_ave, phi_R_ave, phi_S_ave] -- see
-        # Cell_Population.simulate_population/initialize in cell_model.py. Both append before
+        # sim log entry layout:
+        #   [t, k_n0, b, num_cells, U_ave, phi_R_ave, phi_S_ave, phiS_max_ave]
+        # see Cell_Population.simulate_population/initialize in cell_model.py. Both append before
         # observation() runs, so logger[-1] is always the current step.
-        phi_S_ave = self.sim_cells.logger[-1][6]
+        if self.context_signal == "noise":
+            # information-free control for a phi_S arm: same marginal and same latch/age
+            # dynamics as the real signal, but independent of the population state.
+            value = float(np.clip(np.random.normal(self.context_noise_mean, self.context_noise_std),
+                                  0.0, self.sim_cells.phiS_max))
+        elif self.context_signal == "noise_phiSmax":
+            # information-free control for a phiS_max arm -- its own moments and its own
+            # support, which extends to phiS_max*scale rather than phiS_max.
+            value = float(np.clip(np.random.normal(self.context_noise_mean_phiSmax,
+                                                   self.context_noise_std_phiSmax),
+                                  0.0, self.sim_cells.phiS_max * self.sim_cells.scale))
+        elif self.context_signal == "phiS_max":
+            value = self.sim_cells.logger[-1][7]
+        else:
+            value = self.sim_cells.logger[-1][6]
         if self._context_step < 0 or self._context_step % self.context_update_freq == 0:
-            self._context = phi_S_ave
+            self._context = value
             self._context_age = 0
         else:
             self._context_age += 1

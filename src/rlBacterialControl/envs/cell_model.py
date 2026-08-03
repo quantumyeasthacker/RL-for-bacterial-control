@@ -178,7 +178,7 @@ class Cell_Population(object):
         X_birth = self.f_X(a0,U0,self.phiS_max) * V_birth * 0.5
 
         self._t = 0
-        self._log.append([self._t, k_n0, b, num_cells_init, U0, phi_R0, phi_S0])
+        self._log.append([self._t, k_n0, b, num_cells_init, U0, phi_R0, phi_S0, self.phiS_max])
         self.populations = np.stack((phiR_birth, phiS_birth, a_birth, U_birth, X_birth, V_birth, phiSmax_birth), axis=0)
 
     def _guess_init_values(self, k_n0, b):
@@ -279,6 +279,7 @@ class Cell_Population(object):
         species_stack = self.populations
         for i in range(iterations):
             species_stack = self.MultiIntegrate(species_stack, dt, b, k_n0_list[i]) # integrating one timestep
+            # species_stack = phi_R, phi_S, a, U, X, V, phiSmax_i
 
             X_0 = 1 # amount of division proteins required to trigger division
             # if cell has added threshold volume amount, it will then divide
@@ -320,12 +321,13 @@ class Cell_Population(object):
 
         self.populations = species_stack
         self._t = self._t + delta_t
-        U_ave = species_stack[3].mean() if species_stack[3].size > 0 else 1
-        phi_R_ave = species_stack[0].mean() if species_stack[0].size > 0 else 0
+        phi_R_ave = species_stack[0].mean() if species_stack[0].size > 0 else 0 # if statements cover case when population is completely eliminated
         phi_S_ave = species_stack[1].mean() if species_stack[1].size > 0 else 0
-        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave, phi_R_ave, phi_S_ave])
+        U_ave = species_stack[3].mean() if species_stack[3].size > 0 else 1
+        phiS_max_ave = species_stack[6].mean() if species_stack[6].size > 0 else 0
+        self._log.append([self._t, k_n0_list[-1], b, self.true_num_cells, U_ave, phi_R_ave, phi_S_ave, phiS_max_ave])
+
         return self._t, (true_num_cells_prev, true_num_cells_next)
-        # return self._t, self.true_num_cells
 
     @property
     def logger(self):
@@ -334,7 +336,3 @@ class Cell_Population(object):
     @property
     def time_point(self):
         return self._t
-
-
-# class Scenario(object):
-#     pass
