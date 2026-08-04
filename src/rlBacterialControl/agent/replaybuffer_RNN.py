@@ -1,7 +1,6 @@
 import random
 import numpy as np
 from collections import namedtuple
-import time
 
 
 class ReplayBuffer:
@@ -13,16 +12,16 @@ class ReplayBuffer:
             "reward", "next_state", "hidden_state_init", "next_hidden_state_init", "terminal"))
 
     def push(self, state, action, reward, next_state, hidden_state_init, next_hidden_state_init, terminal):
-        """Adds new tuple of (state, action, reward, next_state) sample to replay buffer
+        """Adds new tuple sample to replay buffer
         If buffer is full (i.e. more than self. capacity) add new samples to beginning of
         replay buffer
         Args:
-            state: state of system
+            state: observed state of system
             action: current action
             reward: observed reward
-            next_state: next state of system
-            hidden_state_init: initial hidden state of sequence
-            next_hidden_state_init: initial hidden state of next_state sequence
+            next_state: next observed state of system
+            hidden_state_init: initial RNN hidden state of sequence
+            next_hidden_state_init: initial RNN hidden state of next_state sequence
             terminal: denotes if next state is terminal or not (1=terminal state, 0 otherwise)
         """
 
