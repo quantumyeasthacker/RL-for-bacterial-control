@@ -2,8 +2,6 @@
 
 This is a port of ``RL-for-bacterial-control-RNN/r2d2_RNN_RLmain.py`` adapted to the
 package's training/eval ecosystem:
-  * dynamics/observations/rewards come from a package env (``VariableNutrientEnv`` etc.),
-    which internally uses ``..envs.cell_model.Cell_Population`` -- NOT cell_model_full_parallel;
   * the twin recurrent Q-networks come from ``.deepQLnetwork_RNN`` (stacked RNN + linear
     head) or ``.deepQLnetwork_RNN_encoder_decoder`` (MLP encoder -> 1-layer RNN -> MLP
     decoder), selectable via the ``net_arch`` argument; the sequence replay buffer is
@@ -44,7 +42,6 @@ import copy
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.optim import Adam
 from joblib import Parallel, delayed
 from scipy import signal
 try:
@@ -60,8 +57,6 @@ from .deepQLnetwork_RNN_encoder_decoder import Model as ModelEncoderDecoder
 from ..envs.envs import BaseEnv
 from ..utils.utils_figure_plot import plot_trajectory, plot_reward_Q_loss
 
-
-EPS = 1e-10
 
 
 class CDQL(object):
@@ -120,12 +115,9 @@ class CDQL(object):
         self.model = ModelClass(self.device,
                                 num_inputs=num_inputs,
                                 num_actions=self.env.num_actions,
-                                rnn_type=rnn_type)
-        # The copied RNN Model hardcodes lr=1e-4 / tau=0.005; honor the package-style
-        # learning_rate / network_update_rate args without modifying the copy.
-        self.model.tau = network_update_rate
-        self.model.q_optimizer_1 = Adam(self.model.q_1.parameters(), lr=learning_rate)
-        self.model.q_optimizer_2 = Adam(self.model.q_2.parameters(), lr=learning_rate)
+                                rnn_type=rnn_type,
+                                learning_rate=learning_rate,
+                                tau=network_update_rate)
 
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
@@ -150,15 +142,13 @@ class CDQL(object):
 
     def _save_data(self, folder_name, replay_buffer=False):
         os.makedirs(folder_name, exist_ok=True)
-        # the copied RNN Model.save_networks does ``folder_name + "q_1"`` (string concat),
-        # so pass a path with a trailing separator.
-        self.model.save_networks(os.path.join(folder_name, ""))
+        self.model.save_networks(folder_name)
         if replay_buffer:
             np.save(os.path.join(folder_name, "replaybuffer.npy"),
                     np.array(self.buffer.buffer, dtype=object))
 
     def load_data(self, folder_name, replay_buffer=False):
-        self.model.load_networks(os.path.join(folder_name, ""))
+        self.model.load_networks(folder_name)
         if replay_buffer:
             self.buffer.load_buffer(os.path.join(folder_name, "replaybuffer.npy"))
 
@@ -241,6 +231,7 @@ class CDQL(object):
         """
         T_eps = 300  # controls how fast exploration decays to exploitation
         epsilon_list = np.arange(episodes)
+        EPS = 1e-10
         epsilon_list = (-np.log10(epsilon_list / T_eps + EPS)).clip(0.05, 1)
 
         step_iter = 0
@@ -375,17 +366,14 @@ class CDQL(object):
         for _ in range(num_decisions):
             obs_t = self._to_tensor(obs).unsqueeze(0)
             with torch.no_grad():
-                x1 = self.model.q_1({'obs': obs_t, 'prev_state': hidden_state}, inference=True)
-                action = torch.argmin(x1['logit'], dim=1).item()
-                # evaluate all four nets at the current obs using the acting net's hidden
-                # state (matches r2d2_RNN_RLmain eval bookkeeping).
-                q_vals = [
-                    x1['logit'].squeeze(0).cpu().numpy(),
-                    self.model.q_2({'obs': obs_t, 'prev_state': hidden_state}, inference=True)['logit'].squeeze(0).cpu().numpy(),
-                    self.model.q_target_1({'obs': obs_t, 'prev_state': hidden_state}, inference=True)['logit'].squeeze(0).cpu().numpy(),
-                    self.model.q_target_2({'obs': obs_t, 'prev_state': hidden_state}, inference=True)['logit'].squeeze(0).cpu().numpy(),
-                ]
-            hidden_state = x1['next_state']
+                # evaluate all four nets (q_1, q_2, q_target_1, q_target_2) at the current obs
+                # using the acting net's hidden state (matches r2d2_RNN_RLmain eval bookkeeping).
+                outputs = [q({'obs': obs_t, 'prev_state': hidden_state}, inference=True)
+                           for q in self.model.q_networks]
+                q_vals = [out['logit'].squeeze(0).cpu().numpy() for out in outputs]
+                # q_networks[0] is q_1, the acting network
+                action = torch.argmin(outputs[0]['logit'], dim=1).item()
+            hidden_state = outputs[0]['next_state']
             obs, reward, terminated, truncated, info = self.env.step(action)
             rewards.append(reward)
             Q_values.append(q_vals)
