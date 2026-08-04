@@ -43,7 +43,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from joblib import Parallel, delayed
-from scipy import signal
 try:
     import wandb
 except ImportError:
@@ -56,6 +55,7 @@ from .deepQLnetwork_RNN_encoder_decoder import Model as ModelEncoderDecoder
 
 from ..envs.envs import BaseEnv
 from ..utils.utils_figure_plot import plot_trajectory, plot_reward_Q_loss
+from ..utils.utils_signal import cross_correlation
 
 
 
@@ -384,12 +384,3 @@ class CDQL(object):
         # (already length-independent) -> report the episode SUM, as originally.
         reward_agg = np.mean if self.env.reward_type == "log10_pop" else np.sum
         return reward_agg(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
-
-
-def cross_correlation(sig1, sig2, max_cross_corr, lag):
-    n_points = len(sig1)
-    cross_corr = signal.correlate(sig1 - np.mean(sig1), sig2 - np.mean(sig2), mode='full')
-    cross_corr /= (np.std(sig1) * np.std(sig2) * n_points)  # Normalize
-    max_cross_corr.append(np.max(cross_corr))
-    lags = signal.correlation_lags(len(sig1), len(sig2), mode="full")
-    lag.append(lags[np.argmax(cross_corr)])
