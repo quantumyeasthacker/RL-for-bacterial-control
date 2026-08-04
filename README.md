@@ -1,6 +1,6 @@
 # RL-for-bacterial-control
 
-Reinforcement learning for physiological control of heterogeneous cell populations.
+Code for [Reinforcement learning for adaptive control of phenotypically heterogeneous bacterial populations](https://www.biorxiv.org/content/10.1101/2025.11.21.689767v1).
 
 ## Repository layout
 
