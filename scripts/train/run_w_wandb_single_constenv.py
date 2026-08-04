@@ -47,9 +47,6 @@ if MAIN:
 
     cell_config = CellConfig()
     env_config = EnvConfig(
-        # num_cells_init = 60,
-        # threshold = 50,
-        # delta_t = 0.2,
         k_n0_observation = k_n0_observation,
         b_observation = b_observation,
         k_n0_constant = nutrient_value,

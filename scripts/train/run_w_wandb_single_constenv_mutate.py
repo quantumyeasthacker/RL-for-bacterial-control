@@ -136,9 +136,6 @@ if MAIN:
 
     cell_config = CellConfig(mutate=True, mutate_prob=mutate_prob)
     env_config = EnvConfig(
-        # num_cells_init = 60,
-        # threshold = 50,
-        # delta_t = 0.2,
         k_n0_observation = k_n0_observation,
         b_observation = b_observation,
         delay_embed_len = delay_embed_len,

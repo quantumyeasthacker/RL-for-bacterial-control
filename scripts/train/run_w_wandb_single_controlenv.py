@@ -45,16 +45,11 @@ if MAIN:
                     settings=wandb.Settings(symlink=False))
     
     ## ----- RL setting ----- ##
-    # k_n0_observation = False
-    # b_observation = True
     use_gpu = False
     k_n0_actions = [float(nutr) for nutr in nutrient_range.split('_')]
 
     cell_config = CellConfig()
     env_config = EnvConfig(
-        # num_cells_init = 60,
-        # threshold = 50,
-        # delta_t = 0.2,
         b_observation = b_observation,
         k_n0_observation = k_n0_observation,
         delay_embed_len = delay_embed_len,
