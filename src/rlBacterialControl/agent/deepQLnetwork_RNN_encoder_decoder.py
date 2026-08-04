@@ -1,11 +1,9 @@
 from typing import Union, Optional, Dict, Callable, List, Tuple
-# import treetensor.torch as ttorch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
-from torch.optim import Adam
-import matplotlib.pyplot as plt
-import numpy as np
+
+from .twin_q_model import TwinQModel
 
 
 # Encoder/decoder variant of deepQLnetwork_RNN.py.
@@ -14,7 +12,8 @@ import numpy as np
 #   * an MLP **encoder** before the RNN:  Linear(num_inputs->32) -> ReLU -> Linear(32->32),
 #   * an MLP **decoder** after the RNN:   Linear(32->32) -> ReLU -> Linear(32->num_actions)
 #     (the decoder's final layer is the Q-value output; there is no separate head).
-# The RNN core, R2D2 hidden-state plumbing, twin-Q Model, and save/load are unchanged,
+# The RNN core and R2D2 hidden-state plumbing are unchanged, and both modules' `Model`
+# subclass the shared twin_q_model.TwinQModel (optimizers / soft updates / save-load),
 # so this module's `Model` is a drop-in replacement for deepQLnetwork_RNN.Model.
 
 
@@ -44,10 +43,6 @@ class RNN(nn.Module):
         """
 
         seq_len, batch_size = inputs.shape[:2]
-        # print('seqlen,batchsize',seq_len,batch_size)
-
-        # if batch_size == 4:
-        #     print('before_forward', prev_state)
 
         if prev_state is None:
             num_directions = 1
@@ -78,8 +73,6 @@ class RNN(nn.Module):
                     else:
                         state.append(prev)
             state = list(zip(*state))
-
-            # print('lstm state',state)
 
             prev_state = [torch.cat(t, dim=1) for t in state]
             if self.rnn_type == "GRU":
@@ -123,8 +116,6 @@ class RNN(nn.Module):
             elif self.rnn_type == "GRU":
                 next_state = {k: v for k, v in zip(['h'], next_state)}
 
-        # if batch_size == 4:
-        #     print('after_forward',next_state)
         return next_state
 
     def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] = None) -> torch.BoolTensor:
@@ -191,8 +182,6 @@ class DRQN(nn.Module):
         and an MLP ``decoder`` maps the recurrent feature to per-action Q-values. This
         mirrors deepQLnetwork_RNN.DRQN but replaces the stacked RNN + linear head with
         encoder -> 1-layer RNN -> decoder.
-    Interfaces:
-        ``__init__``, ``forward``.
     """
 
     def __init__(
@@ -247,7 +236,7 @@ class DRQN(nn.Module):
         x, prev_state = inputs['obs'], inputs['prev_state']
         # encoder -> rnn -> decoder; the difference between inference and training is that
         # inference takes the data with seq_len=1 (T=1).
-        # NOTE(rjy): in most situations, set inference=True when evaluate and inference=False when training
+        # NOTE: in most situations, set inference=True when evaluate and inference=False when training
         if inference:
             x = self.encoder(x)  # (B, enc_dec_hidden_size)
             x = x.unsqueeze(0)  # for rnn input, put the seq_len of x as 1 instead of none.
@@ -264,25 +253,23 @@ class DRQN(nn.Module):
             # 1) data['burnin_nstep_obs'] = data['obs'][:bs + self._nstep]
             # 2) data['main_obs'] = data['obs'][bs:-self._nstep]
             # 3) data['target_obs'] = data['obs'][bs + self._nstep:]
-            # NOTE(rjy): (T, B, N) or (T, B, C, H, W)
+            # NOTE: (T, B, N) or (T, B, C, H, W)
             # assert len(x.shape) in [3, 5], x.shape
 
             # need to transpose to match expected dimensions
             x = torch.transpose(x, 0, 1)  # (T, B, N)
-            # print('x',x.shape)
 
             # encode every timestep before the recurrent unroll
             x = self.encoder(x)  # (T, B, enc_dec_hidden_size)
 
-            # NOTE(rjy) rnn_embedding stores all hidden_state
+            # NOTE rnn_embedding stores all hidden_state
             rnn_embedding = []
-            # TODO(nyz) how to deal with hidden_size key-value
             hidden_state_list = []
             if saved_state_timesteps is not None:
                 saved_state = []
 
             for t in range(x.shape[0]):  # T timesteps
-                # NOTE(rjy) use x[t:t+1] but not x[t] can keep original dimension
+                # NOTE use x[t:t+1] but not x[t] can keep original dimension
                 # print('x[t]',x[t:t+1])
                 output, prev_state = self.rnn(x[t:t + 1], prev_state)  # output: (1,B, rnn_hidden_size)
                 #^^ does prev_state need to be copied when its redefined?
@@ -294,7 +281,7 @@ class DRQN(nn.Module):
                 hidden_state_list.append(torch.cat(hidden_state, dim=1))
             x = torch.cat(rnn_embedding, 0)  # (T, B, rnn_hidden_size)
             x = parallel_wrapper(self.decoder)(x)  # (T, B, action_shape)
-            # NOTE(rjy): x['next_state'] is the hidden state of the last timestep inputted to lstm
+            # NOTE: x['next_state'] is the hidden state of the last timestep inputted to lstm
             # the last timestep state including the hidden state (h) and the cell state (c)
             # shape: {list: B{dict: 2{Tensor:(1, 1, rnn_hidden_size}}}
             x['next_state'] = prev_state
@@ -332,7 +319,7 @@ def parallel_wrapper(forward_fn: Callable) -> Callable:
                 d = d.reshape(T, B, *d.shape[1:])
             return d
 
-        # NOTE(rjy): the initial input shape will be (T, B, N),
+        # NOTE: the initial input shape will be (T, B, N),
         #            means encoder or head should process B trajectorys, each trajectory has T timestep,
         #            but T and B dimension can be both treated as batch_size in encoder and head,
         #            i.e., independent and parallel processing,
@@ -345,98 +332,14 @@ def parallel_wrapper(forward_fn: Callable) -> Callable:
     return wrapper
 
 
-class Model:
-    def __init__(self, device, num_inputs, num_actions, rnn_type):
-        self.device = device
-        self.q_1 = DRQN(num_inputs, num_actions, rnn_type).to(device)
-        self.q_target_1 = DRQN(num_inputs, num_actions, rnn_type).to(device)
+class Model(TwinQModel):
+    """Twin recurrent Q-networks (clipped double Q-learning); see ``.twin_q_model.TwinQModel``
+        for the shared optimizer / soft-update / save-load machinery.
+    """
 
-        self.q_2 = DRQN(num_inputs, num_actions, rnn_type).to(device)
-        self.q_target_2 = DRQN(num_inputs, num_actions, rnn_type).to(device)
-
-        self.q_target_1.eval()
-        self.q_target_2.eval()
-
-        self.q_optimizer_1 = Adam(self.q_1.parameters(), lr=1e-4)
-        self.q_optimizer_2 = Adam(self.q_2.parameters(), lr=1e-4)
-
-        self._update(self.q_target_1, self.q_1)
-        self._update(self.q_target_2, self.q_2)
-        self.tau = 0.005
-        self.grad_update_num = 0
-
-    def _smaller_weights_last_layer(self, network, scale):
-        """Updates the last layer with smaller weights
-        Args:
-            network: network to update
-            scale: amount to scale down weights of last layer
-        """
-        last_layers = list(network.state_dict().keys())[-2:]
-        for layer in last_layers:
-            network.state_dict()[layer] /= scale
-
-    def _update(self, target, local):
-        """Set the parametrs of target network to be that of local network
-        Args:
-            target: target network
-            local: local network
-        """
-        target.load_state_dict(local.state_dict())
-
-    def _soft_update(self, target, local):
-        """Soft update of parameters in target Networks
-        """
-        for target_param, param in zip(target.parameters(), local.parameters()):
-            target_param.data.copy_(target_param.data
-                                    * (1.0 - self.tau)
-                                    + param.data * self.tau)
-
-    def update_target_nn(self):
-        self._soft_update(self.q_target_1, self.q_1)
-        self._soft_update(self.q_target_2, self.q_2)
-
-    def save_networks(self, folder_name):
-        """
-        Save Networks
-        """
-        torch.save({"model_state_dict": self.q_1.state_dict(),
-                    "optimizer_state_dict": self.q_optimizer_1.state_dict()
-                    }, folder_name + "q_1")
-
-        torch.save({"model_state_dict": self.q_2.state_dict(),
-                    "optimizer_state_dict": self.q_optimizer_2.state_dict()
-                    }, folder_name + "q_2")
-
-        torch.save({"model_state_dict": self.q_target_1.state_dict()},
-                   folder_name + "q_target_1")
-
-        torch.save({"model_state_dict": self.q_target_2.state_dict()},
-                   folder_name + "q_target_2")
-
-    def load_networks(self, folder_name="./"):
-        """Loads networks and optimizer state
-        Args:
-            folder_name: folder from which to load networks from
-        """
-
-        q_checkpoint_1 = torch.load(folder_name + "q_1",
-                                         map_location=self.device)
-        self.q_1.load_state_dict(q_checkpoint_1["model_state_dict"])
-        self.q_optimizer_1.load_state_dict(q_checkpoint_1[
-            "optimizer_state_dict"])
-
-        q_checkpoint_2 = torch.load(folder_name + "q_2",
-                                         map_location=self.device)
-        self.q_2.load_state_dict(q_checkpoint_2["model_state_dict"])
-        self.q_optimizer_2.load_state_dict(q_checkpoint_2[
-            "optimizer_state_dict"])
-
-        q_target_checkpoint_1 = torch.load(folder_name + "q_target_1",
-                                                map_location=self.device)
-        self.q_target_1.load_state_dict(
-            q_target_checkpoint_1["model_state_dict"])
-
-        q_target_checkpoint_2 = torch.load(folder_name + "q_target_2",
-                                                map_location=self.device)
-        self.q_target_2.load_state_dict(
-            q_target_checkpoint_2["model_state_dict"])
+    def __init__(self, device, num_inputs, num_actions, rnn_type, learning_rate, tau):
+        self.num_inputs = num_inputs
+        self.num_actions = num_actions
+        super().__init__(device,
+                         lambda: DRQN(num_inputs, num_actions, rnn_type),
+                         learning_rate, tau)
