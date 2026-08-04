@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 @dataclass
 class CellConfig:
-    phiR_min = 0
+    phiR_min: float = 0.0
     phiR_max: float = 0.55 # Scott et al. 2010
     a_n: float = 1e-3 # level to trigger negative feeback inhibition of amino acid supply, Scott et al. 2014
     a_t: float = 1e-4 # amino acid level for efficient peptide elongation, Scott et al. 2014
@@ -15,11 +15,11 @@ class CellConfig:
 
     # Kratz and Banerjee 2023
     sigma: float = 0.015 # noise strength
-    alphaX: float = 4.5
+    alphaX: float = 4.5 # division protein parameters
     betaX: float = 1.1
     mu: float = 0.6
     k_t0: float = 2.7 # translational efficiency
-    q: int = 2
+    q: int = 2 # hill coefficient for f_S
     phiS_max: float = 0.33
     alpha: float = 1.54
     beta: float = 10.5
@@ -33,6 +33,7 @@ class CellConfig:
     assert scale * phiS_max < phiR_max, 'scale value is unphysical (too large)'
     rand_init: bool = False # if True, phiS_max can change at the beginning of each episode
     rand_std: Optional[Union[float, None]] = 0.1 # set the std for episode initialization
+
 
 class Cell_Population(object):
     def __init__(self, cell_config):
@@ -70,7 +71,7 @@ class Cell_Population(object):
         self.rand_init = cell_config.rand_init
         self.rand_std = cell_config.rand_std
 
-        # defining regulatory functions and their derivatives
+    # defining regulatory functions and their derivatives
     def f(self, a):
         return 1 / (1 + (a/self.a_n)**self.n_f) # regulatory function for k_n
     def f_prime(self, a):
@@ -92,8 +93,7 @@ class Cell_Population(object):
 
     def U_t(self, U):
         ut = 1 - U
-        # return np.maximum(ut, 0)
-        return ut.clip(0, None)
+        return np.maximum(ut, 0)
 
     def GrowthRate(self, a, phi_R, U):
         # growth rate function
@@ -114,7 +114,7 @@ class Cell_Population(object):
         return dpdt
 
     def dAAdt(self, a, phi_R, phi_S, U, k_n0):
-        # amino acid concentration ODE (variable nutrient conc.(c))
+        # amino acid concentration ODE (variable nutrient conc.)
         k_n = k_n0 * self.f(a) # nutritional efficiency, depends on concentration of nutrients outside cell
         k_t = self.k_t0 * self.g(a) * self.U_t(U) # translational efficiency
 
@@ -214,11 +214,8 @@ class Cell_Population(object):
         phi_R = phiR_i + self.dphiR_dt(phiR_i, a_i, U_i, phiSmax_i)*dt
         phi_S = phiS_i + self.dphiS_dt(phiS_i, a_i, phiR_i, U_i, phiSmax_i)*dt
         a = a_i + self.dAAdt(a_i, phiR_i, phiS_i, U_i, k_n0)*dt
-        # ensure that amino acid conc. is not negative
+        # ensure that amino acid mass frac is physical
         a[a < 1e-7] = 1e-7
-        # if a < 1e-7:
-        #     print('Warning: amino acid conc. went negative and was reset, consider decreasing integration step size')
-        #     a = 1e-7
 
         # adding noise to U
         noise = np.sqrt(2*self.sigma) * np.sqrt(dt) * np.random.normal(size=U_i.shape)
@@ -236,27 +233,30 @@ class Cell_Population(object):
     def _cell_population_truncate(self, threshold):
         num_entity = self.populations.shape[0]
         num_cells_saved = self.populations.shape[-1]
+        # phi_R, phi_S, a, U, X, V, phiS_max = self.populations
 
         if num_cells_saved > threshold:
             # downsampling if population exceeds threshold
-            row_ids = np.random.randint(num_cells_saved, size = threshold)
+            row_ids = np.random.choice(num_cells_saved, size = threshold, replace=False)
             self.populations = self.populations[:,row_ids]
             num_cells = threshold
         elif (num_cells_saved < threshold) and (self.true_num_cells > num_cells_saved):
             # upsampling if population decreased, but is still above number currently being simulated
             num_cells_add = int(np.min((threshold-num_cells_saved, self.true_num_cells-num_cells_saved)))
             num_cells = int(num_cells_saved+num_cells_add)
-            # t_birth = np.ones((num_cells,1))*t_birth[0]
 
             population_new = np.random.normal(size=(num_entity,num_cells_add))
             population_new = population_new * self.populations.std(axis=-1, keepdims=True) \
                 + self.populations.mean(axis=-1, keepdims=True)
 
-            population_new = population_new.clip(0, 0.99)
-            population_new[0] = population_new[0].clip(self.phiR_min, self.phiR_max)
-            population_new[1] = population_new[1].clip(None, self.phiS_max)
-            population_new[2] = population_new[2].clip(1e-7, None)
+            # clipping sampled values to make sure they remain physical
+            population_new[2] = population_new[2].clip(1e-7, 0.99)
+            population_new[3] = population_new[3].clip(0, 0.99)   # U: stay below the death threshold
+            population_new[4] = population_new[4].clip(0, 0.99)   # X: stay below division threshold X_0 = 1
             population_new[5] = population_new[5].clip(self.populations[5].min(), self.populations[5].max())
+            population_new[6] = population_new[6].clip(0, self.phiS_max*self.scale)
+            population_new[1] = population_new[1].clip(0, population_new[6]) # per-cell clip, must be done after phiS_max clip
+            population_new[0] = population_new[0].clip(self.phiR_min, self.phiR_max - population_new[1]) # ensures phiR + phiS = phiR_max, must be done after phi_S clip
 
             self.populations = np.concatenate((self.populations, population_new), -1)
         else:
@@ -266,11 +266,9 @@ class Cell_Population(object):
 
     def simulate_population(self, k_n0_list, b, delta_t, n_steps=3000, threshold=50):
         if np.isnan(self.populations).any() or (self.populations < 0).any(): # checking to make sure nan values are not present
-            # print('populations:', self.populations)
             raise ValueError(f'Simulation error, nan or negative values present')
 
         num_cells = self._cell_population_truncate(threshold)
-        # unpacking initial conditions for each cell trajectory
 
         iterations = int(delta_t * n_steps)
         dt = 1 / n_steps
@@ -295,7 +293,7 @@ class Cell_Population(object):
                     # mutating each child with probability mu
                     mut_ind = np.random.rand(birth_check.sum()) < self.mutate_prob
                     phiSmax_children = X_stack_children[6,mut_ind] * np.exp(np.random.normal(0,self.phiSmax_sigma, size=mut_ind.sum()))
-                    X_stack_children[6,mut_ind] = np.clip(phiSmax_children,0,self.phiS_max*self.scale)
+                    X_stack_children[6,mut_ind] = np.clip(phiSmax_children, 0,self.phiS_max*self.scale)
 
                 species_stack[4,birth_check] = 0
                 species_stack[5,birth_check] = species_stack[5,birth_check] * r
