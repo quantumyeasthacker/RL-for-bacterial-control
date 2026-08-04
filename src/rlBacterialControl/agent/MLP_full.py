@@ -2,28 +2,21 @@ import os
 import random
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from joblib import Parallel, delayed
-import copy
 from scipy import signal
 try:
     import wandb
 except ImportError:
     # wandb is only used for training-time logging; eval/inference does not need it.
     wandb = None
-# import pickle
 
 from .replaybuffer import ReplayBuffer
 from .deepQLnetwork import Model
 
-from ..envs.envs import ConstantNutrientEnv, VariableNutrientEnv, ControlNutrientEnv, BaseEnv, EnvConfig
-from ..envs.cell_model import CellConfig
-
+from ..envs.envs import BaseEnv
 from ..utils.utils_figure_plot import plot_trajectory, plot_reward_Q_loss
 
-
-EPS = 1e-10
 
 
 class CDQL(object):
@@ -33,8 +26,6 @@ class CDQL(object):
         buffer_size: int = 1_000_000,
         batch_size: int = 512,
         gamma: float = 0.99,
-        # lambda_smooth: float = 0.1,
-        # noise_scale : float = 1.0,
         update_freq: int = 2,
         train_freq: int = 1,
         gradient_steps: int = 1,
@@ -46,18 +37,16 @@ class CDQL(object):
         Args:
             env: environment to train on
             buffer_size: size of replay buffer
-            batch_size: batch size for training
+            batch_size: batch size for Q network update during training
             gamma: reward discount factor
-            # lambda_smooth: temporal regularization coefficient
-            # noise_scale: noise parameters for smooth exploration
-            update_freq: frequency of target q updates per q update
-            train_freq: frequency of training per step
-            gradient_steps: number of gradient steps to take each update
+            update_freq: number of q updates in between each target q update
+            train_freq: number of actions in between each online q network update, default 1
+            gradient_steps: number of gradient steps to take each update, default 1
             use_gpu: whether to use gpu
             learning_rate: lr for updating Q networks based on Bellman residual
-            network_update_rate: update rate for target network
+            network_update_rate: Polyak averaging update rate for target network
         '''
-        if use_gpu and torch.cuda.is_available(): # and torch.cuda.device_count() > 1:
+        if use_gpu and torch.cuda.is_available():
             self.device = torch.device('cuda')
         else:
             self.device = torch.device('cpu')
@@ -70,15 +59,9 @@ class CDQL(object):
                            learning_rate = learning_rate,
                            tau = network_update_rate)
 
-        # env = env_config.env_name(env_config, cell_config)
-        # model = Model(self.device, num_inputs = env_config.delay_embed_len*
-        #               (1 + env_config.k_n0_observation + env_config.b_observation), num_actions = 2)
-
         self.buffer = ReplayBuffer(buffer_size)
         self.batch_size = batch_size
         self.gamma = gamma
-        # self.lambda_smooth = lambda_smooth
-        # self.noise_scale = noise_scale
         self.update_freq = update_freq
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
@@ -91,9 +74,8 @@ class CDQL(object):
         self.ave_Q1_target = []
         self.ave_Q2_target = []
         self.grad_updates = []
-        self.training_iter = 0 # number of updates for q1 and q2
+        self.training_iter = 0 # number of gradient updates to q1 and q2, used to make learning curves plotted against gradient updates rather than episodes
         self.epsilon = None
-        # self.episode_num = 0 # episode number for environment
 
     def _to_tensor(self, x):
         return torch.tensor(x).float().to(self.device)
@@ -103,26 +85,14 @@ class CDQL(object):
         self.model.save_networks(folder_name)
         if replay_buffer:
             np.save(os.path.join(folder_name, "replaybuffer.npy"), np.array(self.buffer.buffer, dtype=object))
-        # with open(os.path.join(folder_name, "replaybuffer.pkl"), "wb") as f:
-        #     pickle.dump(self.buffer.buffer, f)
-        # with open(os.path.join(folder_name, "episode_num.txt"), "w") as f:
-        #     f.write(str(self.episode_num))
 
     def load_data(self, folder_name, replay_buffer = False):
         self.model.load_networks(folder_name)
         if replay_buffer:
             self.buffer.load_buffer(os.path.join(folder_name, "replaybuffer.npy"))
-        # with open(os.path.join(folder_name, "replaybuffer.pkl"), "rb") as f:
-        #     self.buffer = pickle.load(f)
-        # try:
-        #     with open(os.path.join(folder_name, "episode_num.txt"), "r") as f:
-        #         self.episode_num = int(f.read())
-        #     print(f"Partially trained model found, starting from episode {self.episode_num}.")
-        # except:
-        #     print("No partially trained model found, starting from episode 0.")
 
     def _update(self) -> None:
-        """Updates q1, q2, q1_target and q2_target networks based on clipped Double Q Learning Algorithm
+        """Updates q1, q2, q1_target and q2_target networks based on Clipped Double Q Learning Algorithm (TD3 with modifications for discrete action space with no actor)
         """
         if (len(self.buffer) < self.batch_size):
             return
@@ -142,10 +112,9 @@ class CDQL(object):
             terminated_batch = self._to_tensor(batch.terminated).unsqueeze(-1)
 
             with torch.no_grad():
-                # Add noise to smooth out learning
                 Q_next_1 = torch.min(self.model.q_target_1(next_state_batch), dim=-1, keepdim=True).values
                 Q_next_2 = torch.min(self.model.q_target_2(next_state_batch), dim=-1, keepdim=True).values
-                # Use max want to avoid underestimation bias #####
+                # max used to avoid underestimation bias
                 Q_next = torch.maximum(Q_next_1, Q_next_2)
                 Q_expected = reward_batch + self.gamma * Q_next * (1 - terminated_batch)
 
@@ -153,21 +122,6 @@ class CDQL(object):
             Q_2 = self.model.q_2(state_batch).gather(-1, action_batch)
             L_1 = nn.MSELoss()(Q_1, Q_expected)
             L_2 = nn.MSELoss()(Q_2, Q_expected)
-
-            # # Action smoothness regularization
-            # consecutive_q_1_values = self.model.q_1(state_batch)
-            # next_q_1_values = self.model.q_1(next_state_batch)
-            # action1_probs = F.softmax(consecutive_q_1_values, dim=-1)
-            # next_action1_probs = F.softmax(next_q_1_values, dim=-1)
-            # smoothness1_loss = nn.MSELoss()(action1_probs, next_action1_probs)
-            # L_1 += self.lambda_smooth * smoothness1_loss
-
-            # consecutive_q_2_values = self.model.q_2(state_batch)
-            # next_q_2_values = self.model.q_2(next_state_batch)
-            # action2_probs = F.softmax(consecutive_q_2_values, dim=-1)
-            # next_action2_probs = F.softmax(next_q_2_values, dim=-1)
-            # smoothness2_loss = nn.MSELoss()(action2_probs, next_action2_probs)
-            # L_2 += self.lambda_smooth * smoothness2_loss
 
             self.loss.append([L_1.item(), L_2.item()])
             self.model.q_optimizer_1.zero_grad()
@@ -178,24 +132,26 @@ class CDQL(object):
             self.model.q_optimizer_2.step()
             self.training_iter += 1
             if (self.training_iter % self.update_freq) == 0:
-                self.model.update_target_nn()
-        # self.model.grad_update_num +=1
+                self.model.update_target_nn() # perform soft udpate to target
 
     def train(self, episodes: int, num_decisions: int, num_evals: int = 10, folder_name: str = "./") -> None:
-        """Train the model
+        """Main agent train loop
         Args:
             episodes: number of episodes to train
-            gradient_steps: number of gradient steps to take
+            num_decisions: number of agent decisions per training and eval episode
+            num_evals: number of parallel evals to run to periodically assess agent performance
+            folder_name: dir for saving results
         """
 
-        T_eps = 300 # 380, choosing how fast to move from exploration to exploitation
+        T_eps = 300 # choosing how fast to move from exploration to exploitation
+        EPS = 1e-10
         epsilon_list = np.arange(episodes)
         epsilon_list = (-np.log10(epsilon_list/T_eps + EPS)).clip(0.05, 1)
 
         step_iter = 0
         for episode in range(episodes):
             obs, _ = self.env.reset()
-            # while True:
+
             for _ in range(num_decisions):
                 action = self.model.get_action(obs, deterministic = False, epsilon = epsilon_list[episode])
                 obs_next, reward, terminated, truncated, _ = self.env.step(action)
@@ -207,9 +163,9 @@ class CDQL(object):
                 if terminated or truncated:
                     break
             print(f"Episode {episode} completed.")
-            # if episode % 10 == 10 - 1:
+
             if (episode % 10 == 0) or (episode == episodes - 1):
-                # self._save_data(folder_name)
+                # save ckpt
                 self._save_data(os.path.join(folder_name, f"episode_{episode}"))
                 self.evalulate(episode, num_decisions, num_evals, folder_name)
 
@@ -221,13 +177,14 @@ class CDQL(object):
                                    reward_ylabel=reward_ylabel)
 
     def evalulate(self, episode: int, num_decisions: int, num_evals: int, folder_name: str) -> None:
-        """Evaluate the model
+        """Evaluate a given model ckpt
         Args:
-            num_decisions: number of decisions to make
+            episode: episode number for performance record keeping
+            num_decisions: number of decisions to make per eval run
+            num_evals: number of evals runs to make (in parallel)
+            folder_name: dir to save eval results
         """
-        self.model.q_1.eval()
-        self.model.q_2.eval()
-        
+
         extinct_times = []
         extinct_count = 0
         max_cross_corr_kn0 = []
@@ -247,18 +204,15 @@ class CDQL(object):
             # compute max cross correlation and lag
             drug = drug[(self.env.warm_up+1):]
             nutr = nutr[(self.env.warm_up-self.env.delay_embed_len+1):]
-            damage = damage[self.env.warm_up+1:]
-            
-            # drug = drug[(self.env.warm_up+1):]
             # nutr = nutr[(self.env.warm_up+1):]
-            # damage = damage[(self.env.warm_up+1):]
+            damage = damage[self.env.warm_up+1:]
 
             if np.std(drug) > 0 and np.std(nutr) > 0:
                 cross_correlation(drug, nutr, max_cross_corr_kn0, lag_kn0)
             if np.std(drug) > 0 and np.std(damage) > 0:
                 cross_correlation(drug, damage, max_cross_corr_U, lag_U)
 
-            # save extinction times            
+            # save extinction times
             if terminated:
                 extinct_times.append(time[-1])
                 extinct_count += 1
@@ -310,7 +264,7 @@ class CDQL(object):
         # return rewards, Q_values, terminated, truncated, info
         # log10-pop reward does not telescope -> report the per-step MEAN (length-normalized, so
         # rollouts of different length are comparable). Growth-rate reward telescopes to endpoints
-        # (already length-independent) -> report the episode SUM, as originally.
+        # (already length-independent) -> report the episode SUM.
         reward_agg = np.mean if self.env.reward_type == "log10_pop" else np.sum
         return reward_agg(rewards), np.array(Q_values).min(-1).mean(0), terminated, truncated, info
 
