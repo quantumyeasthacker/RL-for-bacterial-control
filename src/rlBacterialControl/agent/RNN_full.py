@@ -199,6 +199,7 @@ class CDQL(object):
 
             with torch.no_grad():
                 input_dict = {'obs': next_state_batch, 'prev_state': next_hidden_state}
+                # by default inference=False, so network is unrolled here starting from next_hidden_state to avoid hidden state staleness
                 Q_next_1 = torch.min(self.model.q_target_1(input_dict)['logit'], dim=2)[0].unsqueeze(2)
                 Q_next_2 = torch.min(self.model.q_target_2(input_dict)['logit'], dim=2)[0].unsqueeze(2)
                 # max over the twin targets to avoid underestimation bias
