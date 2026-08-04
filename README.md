@@ -13,7 +13,7 @@ rl-for-bacterial-control/
 │       ├── envs/               # cell-population model and RL environments
 │       └── utils/              # figure/plot helpers used during training
 ├── scripts/                    # command-line entry points
-│   ├── train/                  # run_w_wandb_single_*.py
+│   ├── train/                  # run_w_wandb_single_*.py, train.py
 │   ├── eval/                   # eval_trained_agents_*.py, eval_robustness*.py
 │   └── simulate/               # simulation_test_*.py
 └── plotting/                   # standalone figure-generation scripts
