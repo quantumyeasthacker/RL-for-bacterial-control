@@ -3,7 +3,7 @@ from scipy.spatial import distance_matrix
 import copy
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, Mapping, Optional, Tuple, Any, Union
+from typing import Optional, Union
 
 from .cell_model import Cell_Population, CellConfig
 
@@ -14,11 +14,10 @@ class EnvConfig:
     k_n0_init: float = 1.0
     b_init: float = 0.0
     n_steps: int = 3_000
-    delta_t: float = 0.2 # 0.15 # hours
+    delta_t: float = 0.2 # hours
     threshold: int = 50
     warm_up: int = 60
     max_pop: int = int(1e11)
-    # max_time: float = 40 # hours
 
     # observation parameters
     delay_embed_len: int = 30
@@ -26,48 +25,38 @@ class EnvConfig:
     b_observation: bool = True
     omega: float = 0.02
 
-    # signal type for the bacterial (population) observation and for the reward/cost.
-    # Both default to "growth_rate", which reproduces the original behavior exactly.
+    # signal type for the bacterial population observation and for the reward/cost, both default to "growth_rate".
     #   "growth_rate" : finite-difference log-growth rate (log N_t - log N_{t-1}) / delta_t
     #   "log10_pop"   : base-10 log of the population count, log10(N_t)
     # The nutrient (k_n0) and antibiotic (b) observation blocks are unaffected by this choice.
     obs_type: str = "growth_rate"
     reward_type: str = "growth_rate"
 
-    # measurement imperfection parameters (real bacterial measurements are noisy and lagged)
-    # both default to "off", so a zero-config env reproduces the original (perfect-sensing) behavior.
+    # measurement imperfection parameters (real bacterial measurements could be noisy and/or lagged)
+    # default gives a zero-config env gives perfect-sensing behavior.
     meas_noise_std: float = 0.0 # std of log-normal multiplicative noise on the measured population count; 0 disables noise
     meas_lag: int = 0 # number of decision steps the bacterial (growth-rate) measurement is delayed; 0 disables lag
 
-    # slow physiological (proteome) context: the population-average stress-protein fraction
-    # phi_S_ave. Unlike the bacterial/nutrient/drug signals it is expensive to assay, so it is
-    # re-measured only every context_update_freq decision steps and held fixed in between.
-    # Defaults to "off", so a zero-config env reproduces the original observation exactly.
+    # slow proteome context: the population-average stress-protein fraction phi_S_ave or phiS_max_ave.
+    # re-measured only every context_update_freq decision steps and held fixed in between
     context_observation: bool = False # if True, append the latched context to the observation
     context_update_freq: int = 50 # decision steps between context re-measurements
     context_age_observation: bool = True # if True, also append the normalized age of the latched
     # context (steps since it was last re-measured, divided by context_update_freq). Without it the
     # refresh is an unobservable jump and the augmented state is not Markov; set False to ablate.
 
-    # what the context block actually carries:
+    # what context block carries:
     #   "phi_S"         population-average stress-protein fraction (fast physiological state)
-    #   "phiS_max"      population-average evolvable ceiling -- the trait mutation acts on
-    #   "noise"         INFORMATION-FREE CONTROL for a phi_S arm
-    #   "noise_phiSmax" INFORMATION-FREE CONTROL for a phiS_max arm
-    # A noise arm is an independent draw with the same marginal as the signal it controls for,
-    # latched and aged identically, so the observation has the same width and statistics but
-    # carries no information about the population. It separates "the signal is informative"
-    # from "two extra input units helped".
+    #   "phiS_max"      population-average stress-protein max allowable allocation -- the trait mutation acts on
+    #   "noise"         INFORMATION-FREE CONTROL for phi_S
+    #   "noise_phiSmax" INFORMATION-FREE CONTROL for phiS_max
+    # Noise args allow for independent draw with the same dist as the signal it controls for,
+    # so the observation has the same width and statistics but carries no information about the population.
+    # Separates usefullness of signal vs larger network.
     #
-    # The two signals have very different marginals, so each noise arm needs its own moments --
-    # pairing a phiS_max arm against phi_S-calibrated noise would confound the comparison with
-    # a large input-scale difference. Both sets were measured over the decision phase of ctx50
-    # evals at mutation rates 0.111/0.222:
-    #   phi_S     mean 0.0766  sd 0.0622   support [0, phiS_max]
-    #   phiS_max  mean 0.3622  sd 0.0330   support [0, phiS_max*scale]  (extinct-population
-    #             samples, where the mean falls back to 0, excluded -- 0.2% of samples)
-    # Draws are clipped to the corresponding support. Re-measure with
-    # scripts/eval/calib_phiSmax_marginal.sbatch if the training conditions change.
+    # The two signals have very different average behavior, so each noise arm needs to be calibrated separately.
+    # Both sets were measured over the decision phase of ctx50 evals at mutation rates 0.111/0.222.
+    # Re-measure with scripts/eval/calib_phiSmax_marginal.sbatch if the training conditions change.
     context_signal: str = "phi_S"
     context_noise_mean: float = 0.0766          # phi_S-calibrated
     context_noise_std: float = 0.0622
@@ -82,9 +71,9 @@ class EnvConfig:
     hold_out_range_const: Optional[list] = None # list specifying interval of nutrient concentrations over which not be trained on, should fall within range of k_n0_constant
 
     # variable nutrient environmental parameters
-    T_k_n0: Optional[Union[list[int], int, None]] = None # 6
-    k_n0_mean: Optional[Union[float, None]] = None # 2.55
-    sigma_kn0: Optional[Union[float, None]] = None # 0.1
+    T_k_n0: Optional[Union[list[int], int, None]] = None
+    k_n0_mean: Optional[Union[float, None]] = None
+    sigma_kn0: Optional[Union[float, None]] = None
     hold_out_range_var: Optional[list] = None # list specifying interval of periods over which not be trained on, should fall within range of T_k_n0
     noise_process: Optional[str] = "OU" # other option is GP
     ls: Optional[float] = None # length-scale parameter for GP
@@ -105,7 +94,6 @@ class BaseEnv(object):
         self.threshold = env_config.threshold
         self.warm_up = env_config.warm_up
         self.max_pop = env_config.max_pop
-        # self.max_time = env_config.max_time
         self.delay_embed_len = env_config.delay_embed_len
         self.k_n0_observation = env_config.k_n0_observation
         self.b_observation = env_config.b_observation
@@ -235,7 +223,7 @@ class BaseEnv(object):
         if self.obs_type == "log10_pop":
             # base-10 log of the (noisy) measured population count: log10(N_meas) = log10(N_true) + eps/ln(10)
             bact_signal = (np.log(num_cells) + meas_log_noise) / np.log(10)
-        else:  # "growth_rate" (default, original behavior)
+        else:  # "growth_rate" (default behavior)
             # The agent observes the finite-difference growth rate, so eps propagates as
             #   growth_rate_obs = growth_rate_true + (eps_t - eps_{t-1}) / delta_t.
             # N_{t-1} is measured once but enters two consecutive estimates, hence the shared
@@ -255,7 +243,7 @@ class BaseEnv(object):
         self.b_history.pop(0)
         self.b_history.append(b)
 
-        # time lag: the bacterial measurement reaches the agent meas_lag decision steps late,
+        # note on time lag: the bacterial measurement reaches the agent meas_lag decision steps late,
         # so it sees the population signal window ending meas_lag steps in the past. The drug-action
         # history (b) and nutrient signal (k_n0) stay current -- the agent knows what it applied.
         bact_obs = self.num_cells_history[:self.delay_embed_len]
@@ -277,7 +265,7 @@ class BaseEnv(object):
             # Floor at -5: any count below 1 cell (including extinction, count == 0) is
             # treated as log10(N) == -5 rather than diverging to -inf.
             cost = np.log10(num_cells) if num_cells >= 1 else -5.0
-        else:  # "growth_rate" (default, original behavior)
+        else:  # "growth_rate" (default behavior)
             num_cells = 1e-5 if num_cells == 0 else num_cells
             cost = (np.log(num_cells) - np.log(num_cells_prev)) / self.delta_t # + self.omega*b**2 # nonlinear drug penalty
         return cost
@@ -285,8 +273,7 @@ class BaseEnv(object):
     @property
     def obs_len(self):
         """Length of the observation vector returned by observation().
-        Single source of truth for the agents' network input dimension -- the bacterial,
-        nutrient and drug blocks are delay-embedded, the context block is not.
+        agents' network input dimension -- the bacterial, nutrient and drug blocks are delay-embedded, the context block is not.
         """
         return (self.delay_embed_len * (1 + self.k_n0_observation + self.b_observation)
                 + self.context_observation
@@ -298,7 +285,7 @@ class BaseEnv(object):
 
     @property
     def truncated(self):
-        return self.sim_cells.true_num_cells >= self.max_pop # or self.sim_cells.time_point >= self.max_time
+        return self.sim_cells.true_num_cells >= self.max_pop
 
     @property
     def info(self):
